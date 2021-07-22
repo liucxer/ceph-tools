@@ -1,4 +1,4 @@
-module ceph-tools
+module github.com/liucxer/ceph-tools
 
 go 1.16
 

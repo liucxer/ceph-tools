@@ -1,8 +1,8 @@
 package ceph_conf_test
 
 import (
-	"ceph-tools/pkg/ceph_conf"
 	"encoding/json"
+	"github.com/liucxer/ceph-tools/pkg/ceph_conf"
 	"github.com/stretchr/testify/require"
 	"testing"
 )

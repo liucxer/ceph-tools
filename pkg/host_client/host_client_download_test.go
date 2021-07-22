@@ -1,7 +1,7 @@
 package host_client_test
 
 import (
-	"ceph-tools/pkg/host_client"
+	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/stretchr/testify/require"
 	"testing"
 )

@@ -1,8 +1,8 @@
 package cluster_client
 
 import (
-	"ceph-tools/pkg/host_client"
 	"encoding/json"
+	"github.com/liucxer/ceph-tools/pkg/host_client"
 )
 
 type CephStatus struct {

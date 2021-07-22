@@ -1,7 +1,7 @@
 package host_client
 
 import (
-	"ceph-tools/pkg/ceph_conf"
+	"github.com/liucxer/ceph-tools/pkg/ceph_conf"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"time"

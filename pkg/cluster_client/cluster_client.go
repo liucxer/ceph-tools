@@ -1,8 +1,8 @@
 package cluster_client
 
 import (
-	"ceph-tools/pkg/host_client"
 	"fmt"
+	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"strings"

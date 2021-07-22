@@ -1,9 +1,9 @@
 package host_client_test
 
 import (
-	"ceph-tools/pkg/host_client"
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
