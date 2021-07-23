@@ -1,8 +1,8 @@
 package cluster_client
 
 import (
+	"ceph-tools/pkg/host_client"
 	"encoding/json"
-	"github.com/liucxer/ceph-tools/pkg/host_client"
 )
 
 type CephStatus struct {
@@ -20,7 +20,7 @@ func (l CephStatusList) ReadBytesSec() float64 {
 	for _, v := range l {
 		res = res + v.ReadBytesSec
 	}
-	return res
+	return res/ float64(len(l))
 }
 
 func (l CephStatusList) ReadOpPerSec() float64 {
@@ -28,7 +28,7 @@ func (l CephStatusList) ReadOpPerSec() float64 {
 	for _, v := range l {
 		res = res + v.ReadOpPerSec
 	}
-	return res
+	return res/ float64(len(l))
 }
 
 func (l CephStatusList) RecoveringBytesPerSec() float64 {
@@ -36,7 +36,7 @@ func (l CephStatusList) RecoveringBytesPerSec() float64 {
 	for _, v := range l {
 		res = res + v.RecoveringBytesPerSec
 	}
-	return res
+	return res/ float64(len(l))
 }
 
 func (l CephStatusList) WriteBytesSec() float64 {
@@ -44,7 +44,7 @@ func (l CephStatusList) WriteBytesSec() float64 {
 	for _, v := range l {
 		res = res + v.WriteBytesSec
 	}
-	return res
+	return res/ float64(len(l))
 }
 
 func (l CephStatusList) WriteOpPerSec() float64 {
@@ -52,17 +52,7 @@ func (l CephStatusList) WriteOpPerSec() float64 {
 	for _, v := range l {
 		res = res + v.WriteOpPerSec
 	}
-	return res
-}
-
-func (l CephStatusList) Avg() CephStatus {
-	return CephStatus{
-		ReadBytesSec:          l.ReadBytesSec() / float64(len(l)),
-		ReadOpPerSec:          l.ReadOpPerSec() / float64(len(l)),
-		RecoveringBytesPerSec: l.RecoveringBytesPerSec() / float64(len(l)),
-		WriteBytesSec:         l.WriteBytesSec() / float64(len(l)),
-		WriteOpPerSec:         l.WriteOpPerSec() / float64(len(l)),
-	}
+	return res/ float64(len(l))
 }
 
 func (cluster *Cluster) CephStatus(second int) (*CephStatusList, error) {
