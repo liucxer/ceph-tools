@@ -1,0 +1,56 @@
+package client_ceph_status
+
+import (
+	bytes "bytes"
+
+	github_com_go_courier_sqlx_v2_datatypes "github.com/go-courier/sqlx/v2/datatypes"
+	github_com_go_courier_statuserror "github.com/go-courier/statuserror"
+	github_com_liucxer_srv_ceph_status_pkg_mgrs_node "github.com/liucxer/srv-ceph-status/pkg/mgrs/node"
+	github_com_liucxer_srv_ceph_status_pkg_models "github.com/liucxer/srv-ceph-status/pkg/models"
+	github_com_liucxer_srv_ceph_status_pkg_tools "github.com/liucxer/srv-ceph-status/pkg/tools"
+)
+
+type BytesBuffer = bytes.Buffer
+
+type GithubComGoCourierSqlxV2DatatypesTimestamp = github_com_go_courier_sqlx_v2_datatypes.Timestamp
+
+type GithubComGoCourierStatuserrorErrorField = github_com_go_courier_statuserror.ErrorField
+
+type GithubComGoCourierStatuserrorErrorFields = github_com_go_courier_statuserror.ErrorFields
+
+type GithubComGoCourierStatuserrorStatusErr = github_com_go_courier_statuserror.StatusErr
+
+type GithubComLiucxerSrvCephStatusPkgMgrsNodeCreateNodeBody = github_com_liucxer_srv_ceph_status_pkg_mgrs_node.CreateNodeBody
+
+type GithubComLiucxerSrvCephStatusPkgModelsCephStatus struct {
+	GithubComLiucxerSrvCephStatusPkgModelsPrimaryID
+	GithubComLiucxerSrvCephStatusPkgModelsRefNodeID
+	GithubComLiucxerSrvCephStatusPkgModelsRefCephStatusID
+	GithubComLiucxerSrvCephStatusPkgModelsCephStatusBody
+	GithubComLiucxerSrvCephStatusPkgModelsOperationTimesWithDeletedAt
+}
+
+type GithubComLiucxerSrvCephStatusPkgModelsCephStatusBody = github_com_liucxer_srv_ceph_status_pkg_models.CephStatusBody
+
+type GithubComLiucxerSrvCephStatusPkgModelsNode struct {
+	GithubComLiucxerSrvCephStatusPkgModelsPrimaryID
+	GithubComLiucxerSrvCephStatusPkgModelsRefNodeID
+	GithubComLiucxerSrvCephStatusPkgModelsNodeBody
+	GithubComLiucxerSrvCephStatusPkgModelsOperationTimesWithDeletedAt
+}
+
+type GithubComLiucxerSrvCephStatusPkgModelsNodeBody = github_com_liucxer_srv_ceph_status_pkg_models.NodeBody
+
+type GithubComLiucxerSrvCephStatusPkgModelsOperationTimes = github_com_liucxer_srv_ceph_status_pkg_models.OperationTimes
+
+type GithubComLiucxerSrvCephStatusPkgModelsOperationTimesWithDeletedAt struct {
+	GithubComLiucxerSrvCephStatusPkgModelsOperationTimes
+}
+
+type GithubComLiucxerSrvCephStatusPkgModelsPrimaryID = github_com_liucxer_srv_ceph_status_pkg_models.PrimaryID
+
+type GithubComLiucxerSrvCephStatusPkgModelsRefCephStatusID = github_com_liucxer_srv_ceph_status_pkg_models.RefCephStatusID
+
+type GithubComLiucxerSrvCephStatusPkgModelsRefNodeID = github_com_liucxer_srv_ceph_status_pkg_models.RefNodeID
+
+type GithubComLiucxerSrvCephStatusPkgToolsSFID = github_com_liucxer_srv_ceph_status_pkg_tools.SFID

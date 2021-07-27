@@ -54,6 +54,54 @@ func (l CephStatusList) WriteOpPerSec() float64 {
 	return res / float64(len(l))
 }
 
+type OSDPerf struct {
+	OSD struct {
+		Numpg         int64 `json:"numpg"`
+		NumpgPrimary  int64 `json:"numpg_primary"`
+		NumpgReplica  int64 `json:"numpg_replica"`
+		NumpgStray    int64 `json:"numpg_stray"`
+		NumpgRemoving int64 `json:"numpg_removing"`
+	}
+}
+
+func (cluster *Cluster) CurrentOSDPerf(osd string) (*OSDPerf, error) {
+	var res OSDPerf
+	resp, err := cluster.Clients[0].ExecCmd("ceph daemon " +osd +" perf dump")
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(resp, &res)
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+
+}
+
+func (cluster *Cluster) CurrentCephStatus() (*CephStatus, error) {
+	type CephStatusResp struct {
+		PGMap CephStatus `json:"pgmap"`
+	}
+
+	var res CephStatus
+	resp, err := cluster.Clients[0].ExecCmd("ceph status -f json")
+	if err != nil {
+		return nil, err
+	}
+
+	var cephStatusResp CephStatusResp
+	err = json.Unmarshal(resp, &cephStatusResp)
+	if err != nil {
+		return nil, err
+	}
+
+	res = cephStatusResp.PGMap
+
+	return &res, nil
+}
+
 func (cluster *Cluster) CephStatus(second int) (*CephStatusList, error) {
 	type CephStatusResp struct {
 		PGMap CephStatus `json:"pgmap"`

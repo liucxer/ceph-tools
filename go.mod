@@ -3,8 +3,12 @@ module github.com/liucxer/ceph-tools
 go 1.16
 
 require (
-	github.com/BurntSushi/toml v0.3.1
 	github.com/davecgh/go-spew v1.1.1
+	github.com/go-courier/courier v1.4.1
+	github.com/go-courier/metax v1.2.1
+	github.com/go-courier/sqlx/v2 v2.21.6
+	github.com/go-courier/statuserror v1.2.1
+	github.com/liucxer/srv-ceph-status v0.0.0-20210727025218-5c32d6134710
 	github.com/pkg/sftp v1.13.2
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0

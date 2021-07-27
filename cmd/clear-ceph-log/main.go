@@ -24,9 +24,4 @@ func main() {
 	if err != nil {
 		return
 	}
-
-	err = c.ExecCmd("ls -lh /var/log/ceph/")
-	if err != nil {
-		return
-	}
 }

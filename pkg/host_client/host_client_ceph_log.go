@@ -92,6 +92,9 @@ func (client *HostClient) OsdBackupLogFiles() ([]string, error) {
 		if !strings.Contains(logfile, ".backup") {
 			continue
 		}
+		if strings.Contains(logfile, ".gz") {
+			continue
+		}
 		osdLogFiles = append(osdLogFiles, "/var/log/ceph/"+logfile)
 	}
 	return osdLogFiles, err
@@ -120,6 +123,9 @@ func (client *HostClient) OsdLogFiles() ([]string, error) {
 			continue
 		}
 		if strings.Contains(logfile, ".backup") {
+			continue
+		}
+		if strings.Contains(logfile, ".gz") {
 			continue
 		}
 		osdLogFiles = append(osdLogFiles, "/var/log/ceph/"+logfile)
