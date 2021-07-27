@@ -9,7 +9,10 @@ import (
 )
 
 func TestNewHost(t *testing.T) {
-	client := host_client.NewHostClient("10.0.20.28")
+	client, err := host_client.NewHostClient("10.0.20.28")
+	require.NoError(t, err)
+	defer client.Close()
+
 	out, err := client.ExecCmd("ls /tmp")
 	require.NoError(t, err)
 	spew.Dump(string(out))

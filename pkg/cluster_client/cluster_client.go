@@ -1,59 +1,43 @@
 package cluster_client
 
 import (
-	"fmt"
+	"errors"
 	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
-	"strings"
 	"time"
 )
 
-type Client struct {
-	Host       *host_client.HostClient
-	sshClient  *ssh.Client
-	sshSession *ssh.Session
-}
-
 type Cluster struct {
-	Clients []Client
+	Master  *host_client.HostClient
+	Clients []*host_client.HostClient
 }
 
-func NewCluster(ipAddrs []string) (*Cluster, error) {
+func NewCluster(ipAddresses []string) (*Cluster, error) {
+	if len(ipAddresses) == 0 {
+		return nil, errors.New("ipAddresses is empty")
+	}
 	var cluster Cluster
 	defaultUser := "root"
 	defaultPassword := "daemon"
-	defaultPort := "22"
-	for _, ipAddr := range ipAddrs {
-		//创建sshp登陆配置
+	//defaultPort := "22"
+	for _, ipAddr := range ipAddresses {
 		config := &ssh.ClientConfig{
-			Timeout:         time.Second, //ssh 连接time out 时间一秒钟, 如果ssh验证错误 会在一秒内返回
+			Timeout:         3 * time.Second,
 			User:            defaultUser,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(), //这个可以， 但是不够安全
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 			//HostKeyCallback: hostKeyCallBackFunc(h.Host),
 		}
 		config.Auth = []ssh.AuthMethod{ssh.Password(defaultPassword)}
 
-		//dial 获取ssh client
-		addr := fmt.Sprintf("%s:%s", ipAddr, defaultPort)
-		sshClient, err := ssh.Dial("tcp", addr, config)
+		client, err := host_client.NewHostClient(ipAddr)
 		if err != nil {
-			logrus.Errorf("ssh.Dial error [ipAddr:%s, err:%v]", ipAddr, err)
 			return nil, err
 		}
 
-		//创建ssh-session
-		session, err := sshClient.NewSession()
-		if err != nil {
-			logrus.Errorf("sshClient.NewSession error [ipAddr:%s, err:%v]", ipAddr, err)
-			return nil, err
-		}
-		cluster.Clients = append(cluster.Clients, Client{
-			Host:       host_client.NewHostClient(ipAddr),
-			sshClient:  sshClient,
-			sshSession: session,
-		})
+		cluster.Clients = append(cluster.Clients, client)
 	}
+	cluster.Master = cluster.Clients[0]
 	return &cluster, nil
 }
 
@@ -62,11 +46,7 @@ func (cluster *Cluster) Close() error {
 		err error
 	)
 	for _, client := range cluster.Clients {
-		err = client.sshClient.Close()
-		if err != nil {
-			return err
-		}
-		err = client.sshSession.Close()
+		err = client.Close()
 		if err != nil {
 			return err
 		}
@@ -76,9 +56,9 @@ func (cluster *Cluster) Close() error {
 
 func (cluster *Cluster) ExecCmd(cmd string) error {
 	for _, client := range cluster.Clients {
-		_, err := host_client.NewHostClient(client.Host.IpAddr).ExecCmd(cmd)
+		_, err := client.ExecCmd(cmd)
 		if err != nil {
-			logrus.Errorf("host :%s, ExecCmd: err:%v", client.Host.IpAddr, err)
+			logrus.Errorf("host :%s, ExecCmd: err:%v", client.IpAddr, err)
 			return err
 		}
 	}
@@ -93,74 +73,49 @@ func (cluster *Cluster) ClearCephLog() error {
 		logrus.Debugf("ClearCephLog end. cost:%f", cost)
 	}()
 	for _, client := range cluster.Clients {
-		cmdStr := "ls /var/log/ceph"
-		session, err := client.sshClient.NewSession()
+		err := client.ClearCephLog()
 		if err != nil {
-			logrus.Errorf("sshClient.NewSession error [host:%s, err:%v]", client.Host, err)
+			logrus.Errorf("host :%s, ExecCmd: err:%v", client.IpAddr, err)
 			return err
 		}
-		res, err := session.CombinedOutput(cmdStr)
+	}
+
+	return nil
+}
+
+func (cluster *Cluster) CollectCephLog(dstDir string) error {
+	var (
+		err error
+	)
+
+	startTime := time.Now()
+	logrus.Debugf("CollectCephLog start. ")
+	defer func() {
+		cost := time.Now().Sub(startTime).Seconds()
+		logrus.Debugf("CollectCephLog end. cost:%f", cost)
+	}()
+
+	for _, client := range cluster.Clients {
+		err = client.CollectCephLog(dstDir)
 		if err != nil {
-			logrus.Errorf("sshSession.CombinedOutput error. [host:%s, err:%v, cmdStr:%s]", client.Host, err, cmdStr)
 			return err
-		}
-		session.Close()
-
-		logfiles := strings.Split(string(res), "\n")
-
-		for _, logfile := range logfiles {
-			if logfile == "" {
-				continue
-			}
-			cmdStr := "echo '' >  /var/log/ceph/" + logfile
-			client.sshSession.Stdout = nil
-			client.sshSession.Stderr = nil
-			session, err := client.sshClient.NewSession()
-			if err != nil {
-				logrus.Errorf("sshClient.NewSession error [host:%s, err:%v]", client.Host, err)
-				return err
-			}
-			res, err = session.CombinedOutput(cmdStr)
-			if err != nil {
-				logrus.Errorf("host :%s, sshSession.CombinedOutput: err:%v, cmdStr:%s", client.Host, err, cmdStr)
-				return err
-			}
-			session.Close()
 		}
 	}
 	return nil
 }
 
-func (cluster *Cluster) CollectCephLog(dstDir string) error {
+func (cluster *Cluster) BackupAndClearCephLog() error {
+	startTime := time.Now()
+	logrus.Debugf("BackupAndClearCephLog start. ")
+	defer func() {
+		cost := time.Now().Sub(startTime).Seconds()
+		logrus.Debugf("BackupAndClearCephLog end. cost:%f", cost)
+	}()
+
 	for _, client := range cluster.Clients {
-		cmdStr := "ls /var/log/ceph"
-		session, err := client.sshClient.NewSession()
+		err := client.BackupAndClearCephLog()
 		if err != nil {
-			logrus.Errorf("sshClient.NewSession error [host:%s, err:%v]", client.Host, err)
 			return err
-		}
-		res, err := session.CombinedOutput(cmdStr)
-		if err != nil {
-			logrus.Errorf("sshSession.CombinedOutput error. [host:%s, err:%v, cmdStr:%s]", client.Host, err, cmdStr)
-			return err
-		}
-		defer func() { _ = session.Close() }()
-
-		logfiles := strings.Split(string(res), "\n")
-
-		for _, logfile := range logfiles {
-			if logfile == "" {
-				continue
-			}
-			if !strings.Contains(logfile, "ceph-osd") {
-				continue
-			}
-			srcPath := "/var/log/ceph/" + logfile
-			dstPath := dstDir + "/" + logfile
-			err = client.Host.Download(dstPath, srcPath)
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil

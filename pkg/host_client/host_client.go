@@ -1,7 +1,7 @@
 package host_client
 
 import (
-	"github.com/liucxer/ceph-tools/pkg/ceph_conf"
+	"github.com/pkg/sftp"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 	"time"
@@ -12,16 +12,24 @@ type HostClient struct {
 	Port       string
 	User       string
 	Password   string
-	cephConfig *ceph_conf.CephConf
+	sshClient  *ssh.Client
+	sftpClient *sftp.Client
 }
 
-func NewHostClient(IpAddr string) *HostClient {
-	return &HostClient{
+func NewHostClient(IpAddr string) (*HostClient, error) {
+	var (
+		err    error
+		client HostClient
+	)
+	client = HostClient{
 		IpAddr:   IpAddr,
 		Port:     "22",
 		User:     "root",
 		Password: "daemon",
 	}
+
+	err = client.open()
+	return &client, err
 }
 
 func NewHostClientWithPassword(ipAddr, port, user, password string) *HostClient {
@@ -33,7 +41,7 @@ func NewHostClientWithPassword(ipAddr, port, user, password string) *HostClient 
 	}
 }
 
-func (client *HostClient) SSHConfig() *ssh.ClientConfig {
+func (client *HostClient) sshConfig() *ssh.ClientConfig {
 	config := &ssh.ClientConfig{
 		Timeout:         time.Second,
 		User:            client.User,
@@ -43,12 +51,42 @@ func (client *HostClient) SSHConfig() *ssh.ClientConfig {
 	return config
 }
 
-func (client *HostClient) OpenSSHClient() (*ssh.Client, error) {
+func (client *HostClient) open() error {
+	var (
+		err error
+	)
 	addr := client.IpAddr + ":" + client.Port
-	sshClient, err := ssh.Dial("tcp", addr, client.SSHConfig())
+	client.sshClient, err = ssh.Dial("tcp", addr, client.sshConfig())
 	if err != nil {
 		logrus.Errorf("ssh.Dial err. [err:%v,client:%v]", err, client)
-		return nil, err
+		return err
 	}
-	return sshClient, nil
+
+	client.sftpClient, err = sftp.NewClient(client.sshClient, sftp.MaxPacket(1<<15))
+	if err != nil {
+		logrus.Errorf("sftp.NewClient err. [err:%v,client:%v]", err, client)
+		return err
+	}
+
+	return nil
+}
+
+func (client *HostClient) Close() error {
+	var (
+		err error
+	)
+
+	err = client.sftpClient.Close()
+	if err != nil {
+		logrus.Errorf("client.sshSession.Close error [client:%v, err:%v]", client, err)
+		return err
+	}
+
+	err = client.sshClient.Close()
+	if err != nil {
+		logrus.Errorf("client.sshClient.Close error [client:%v, err:%v]", client, err)
+		return err
+	}
+
+	return nil
 }

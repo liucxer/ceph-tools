@@ -1,7 +1,6 @@
 package cluster_client
 
 import (
-	"ceph-tools/pkg/host_client"
 	"encoding/json"
 )
 
@@ -20,7 +19,7 @@ func (l CephStatusList) ReadBytesSec() float64 {
 	for _, v := range l {
 		res = res + v.ReadBytesSec
 	}
-	return res/ float64(len(l))
+	return res / float64(len(l))
 }
 
 func (l CephStatusList) ReadOpPerSec() float64 {
@@ -28,7 +27,7 @@ func (l CephStatusList) ReadOpPerSec() float64 {
 	for _, v := range l {
 		res = res + v.ReadOpPerSec
 	}
-	return res/ float64(len(l))
+	return res / float64(len(l))
 }
 
 func (l CephStatusList) RecoveringBytesPerSec() float64 {
@@ -36,7 +35,7 @@ func (l CephStatusList) RecoveringBytesPerSec() float64 {
 	for _, v := range l {
 		res = res + v.RecoveringBytesPerSec
 	}
-	return res/ float64(len(l))
+	return res / float64(len(l))
 }
 
 func (l CephStatusList) WriteBytesSec() float64 {
@@ -44,7 +43,7 @@ func (l CephStatusList) WriteBytesSec() float64 {
 	for _, v := range l {
 		res = res + v.WriteBytesSec
 	}
-	return res/ float64(len(l))
+	return res / float64(len(l))
 }
 
 func (l CephStatusList) WriteOpPerSec() float64 {
@@ -52,7 +51,7 @@ func (l CephStatusList) WriteOpPerSec() float64 {
 	for _, v := range l {
 		res = res + v.WriteOpPerSec
 	}
-	return res/ float64(len(l))
+	return res / float64(len(l))
 }
 
 func (cluster *Cluster) CephStatus(second int) (*CephStatusList, error) {
@@ -63,8 +62,7 @@ func (cluster *Cluster) CephStatus(second int) (*CephStatusList, error) {
 	var list CephStatusList
 	for i := 0; i < second; i++ {
 		var res CephStatus
-		client := host_client.NewHostClient(cluster.Clients[0].Host.IpAddr)
-		resp, err := client.ExecCmd("ceph status -f json")
+		resp, err := cluster.Clients[0].ExecCmd("ceph status -f json")
 		if err != nil {
 			return nil, err
 		}

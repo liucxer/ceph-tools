@@ -9,8 +9,11 @@ import (
 )
 
 func TestHostClient_Upload(t *testing.T) {
-	client := host_client.NewHostClient("10.0.20.28")
-	err := client.Upload("/tmp", "/Users/liucx/Desktop/ceph.log")
+	client, err := host_client.NewHostClient("10.0.20.28")
+	require.NoError(t, err)
+	defer client.Close()
+
+	err = client.Upload("/tmp", "/Users/liucx/Desktop/ceph.log")
 	require.NoError(t, err)
 
 	out, err := client.ExecCmd("ls /tmp")
