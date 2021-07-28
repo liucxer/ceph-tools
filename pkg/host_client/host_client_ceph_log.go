@@ -3,6 +3,7 @@ package host_client
 import (
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
+	"strconv"
 	"strings"
 )
 
@@ -133,6 +134,31 @@ func (client *HostClient) OsdLogFiles() ([]string, error) {
 	return osdLogFiles, err
 }
 
+func (client *HostClient) ClearOsdLog(osdNums []int64) error {
+	var (
+		err error
+	)
+
+	osdLogFiles, err := client.OsdLogFiles()
+	if err != nil {
+		return err
+	}
+
+	for _, logfile := range osdLogFiles {
+		for _, osdNum := range osdNums {
+			if logfile == "/var/log/ceph/ceph-osd."+strconv.Itoa(int(osdNum))+".log" {
+				clearCmdString := "echo '' >  " + logfile
+				_, err = client.ExecCmd(clearCmdString)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (client *HostClient) ClearCephLog() error {
 	var (
 		err error
@@ -151,6 +177,32 @@ func (client *HostClient) ClearCephLog() error {
 		}
 	}
 
+	return nil
+}
+
+func (client *HostClient) CollectOsdLog(dstDir string, osdNums []int64) error {
+	var (
+		err error
+	)
+
+	osdLogFiles, err := client.OsdLogFiles()
+	if err != nil {
+		return err
+	}
+
+	for _, logfile := range osdLogFiles {
+		for _, osdNum := range osdNums {
+			if logfile == "/var/log/ceph/ceph-osd."+strconv.Itoa(int(osdNum))+".log" {
+				fileNameList := strings.Split(logfile, "/")
+				fileName := fileNameList[len(fileNameList)-1]
+				dstPath := dstDir + "/" + fileName
+				err = client.Download(dstPath, logfile)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 

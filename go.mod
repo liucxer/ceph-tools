@@ -8,6 +8,7 @@ require (
 	github.com/go-courier/metax v1.2.1
 	github.com/go-courier/sqlx/v2 v2.21.6
 	github.com/go-courier/statuserror v1.2.1
+	github.com/google/uuid v1.2.0
 	github.com/liucxer/srv-ceph-status v0.0.0-20210727025218-5c32d6134710
 	github.com/pkg/sftp v1.13.2
 	github.com/sirupsen/logrus v1.8.1

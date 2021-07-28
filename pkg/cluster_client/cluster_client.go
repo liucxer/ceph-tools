@@ -65,6 +65,24 @@ func (cluster *Cluster) ExecCmd(cmd string) error {
 	return nil
 }
 
+func (cluster *Cluster) ClearOsdLog(osdNums []int64) error {
+	startTime := time.Now()
+	logrus.Debugf("ClearOsdLog start. ")
+	defer func() {
+		cost := time.Now().Sub(startTime).Seconds()
+		logrus.Debugf("ClearOsdLog end. cost:%f", cost)
+	}()
+	for _, client := range cluster.Clients {
+		err := client.ClearOsdLog(osdNums)
+		if err != nil {
+			logrus.Errorf("host :%s, ExecCmd: err:%v", client.IpAddr, err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (cluster *Cluster) ClearCephLog() error {
 	startTime := time.Now()
 	logrus.Debugf("ClearCephLog start. ")
@@ -80,6 +98,27 @@ func (cluster *Cluster) ClearCephLog() error {
 		}
 	}
 
+	return nil
+}
+
+func (cluster *Cluster) CollectOsdLog(dstDir string,osdNums []int64) error {
+	var (
+		err error
+	)
+
+	startTime := time.Now()
+	logrus.Debugf("CollectOsdLog start. ")
+	defer func() {
+		cost := time.Now().Sub(startTime).Seconds()
+		logrus.Debugf("CollectOsdLog end. cost:%f", cost)
+	}()
+
+	for _, client := range cluster.Clients {
+		err = client.CollectOsdLog(dstDir, osdNums)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

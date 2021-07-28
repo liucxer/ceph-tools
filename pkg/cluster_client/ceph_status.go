@@ -2,6 +2,7 @@ package cluster_client
 
 import (
 	"encoding/json"
+	"strconv"
 )
 
 type CephStatus struct {
@@ -66,7 +67,7 @@ type OSDPerf struct {
 
 func (cluster *Cluster) CurrentOSDPerf(osd string) (*OSDPerf, error) {
 	var res OSDPerf
-	resp, err := cluster.Clients[0].ExecCmd("ceph daemon " +osd +" perf dump")
+	resp, err := cluster.Clients[0].ExecCmd("ceph daemon " + osd + " perf dump")
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +79,39 @@ func (cluster *Cluster) CurrentOSDPerf(osd string) (*OSDPerf, error) {
 
 	return &res, nil
 
+}
+
+type OSDStatus struct {
+	ActiveClean bool `json:"activeClean"`
+}
+
+func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
+	type OSDStatusResp struct {
+		PGStats []struct {
+			State string `json:"state"`
+		} `json:"pg_stats"`
+	}
+
+	resp, err := cluster.Clients[0].ExecCmd("ceph pg ls-by-osd " + strconv.Itoa(int(osdNum)))
+	if err != nil {
+		return nil, err
+	}
+
+	var osdStatusResp OSDStatusResp
+	err = json.Unmarshal(resp, &osdStatusResp)
+	if err != nil {
+		return nil, err
+	}
+
+	var res OSDStatus
+	res.ActiveClean = true
+	for _, pgStats := range osdStatusResp.PGStats {
+		if pgStats.State != "active+clean" {
+			res.ActiveClean = false
+		}
+	}
+
+	return &res, nil
 }
 
 func (cluster *Cluster) CurrentCephStatus() (*CephStatus, error) {
