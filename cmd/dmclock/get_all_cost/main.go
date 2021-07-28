@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/liucxer/ceph-tools/cmd/dmclock/log_analyze"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
+	"github.com/liucxer/confmiddleware/conflogger"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
@@ -245,6 +246,15 @@ func ReadExecConfig(configFilePath string) (*ExecConfig, error) {
 	return &conf, err
 }
 
+func init() {
+	var logger = conflogger.Log{
+		Name:   "getAllCost",
+		Level:  "Debug",
+	}
+	logger.SetDefaults()
+	logger.Init()
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Println("Usage:\n     ./cmd config.json")
@@ -257,7 +267,7 @@ func main() {
 	}
 	
 	// 连接集群
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.Infof("aaa")
 	cluster, err := cluster_client.NewCluster(execConfig.IpAddr)
 	if err != nil {
 		return
@@ -301,10 +311,10 @@ func main() {
 						return
 					}
 
-					fmt.Println("-------------------", *bsRes.FioConfig,
+					logrus.Warningf("fioConfig Result:%+v, ExpectCost:%f, ActualCost:%f", *bsRes.FioConfig,
 						(*bsRes).DMClockJobList.ExpectCost(),
 						(*bsRes).DMClockJobList.ActualCost(),
-					)
+						)
 					fioResultList = append(fioResultList, *bsRes)
 				}
 			}
