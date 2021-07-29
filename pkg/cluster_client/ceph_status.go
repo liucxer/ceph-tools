@@ -92,7 +92,7 @@ func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
 		} `json:"pg_stats"`
 	}
 
-	resp, err := cluster.Clients[0].ExecCmd("ceph pg ls-by-osd " + strconv.Itoa(int(osdNum)) +" -f json")
+	resp, err := cluster.Clients[0].ExecCmd("ceph pg ls-by-osd " + strconv.Itoa(int(osdNum)) + " -f json")
 	if err != nil {
 		return nil, err
 	}

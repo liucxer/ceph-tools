@@ -16,15 +16,17 @@ import (
 )
 
 type FioConfig struct {
-	OsdNum        []int64 `json:"osdNum"`
-	DiskType      string  `json:"diskType"`
-	Runtime       int64   `json:"runtime"`
-	OpType        string  `json:"opType"`
-	Pool          string  `json:"pool"`
-	Volume        string  `json:"volume"`
-	BlockSize     string  `json:"blockSize"`
-	IoDepth       int64   `json:"ioDepth"`
-	RecoveryLimit float64 `json:"recoveryLimit"`
+	OsdNum         []int64 `json:"osdNum"`
+	DiskType       string  `json:"diskType"`
+	Runtime        int64   `json:"runtime"`
+	OpType         string  `json:"opType"`
+	DataPool       string  `json:"dataPool"`
+	RecoveryPool   string  `json:"recoveryPool"`
+	DataVolume     string  `json:"dataVolume"`
+	RecoveryVolume string  `json:"recoveryVolume"`
+	BlockSize      string  `json:"blockSize"`
+	IoDepth        int64   `json:"ioDepth"`
+	RecoveryLimit  float64 `json:"recoveryLimit"`
 }
 
 func (exec *FioConfig) Config() string {
@@ -41,22 +43,22 @@ rw=` + exec.OpType + `
 runtime=` + strconv.Itoa(int(exec.Runtime)) + `
 bs=` + exec.BlockSize + `
 iodepth=` + strconv.Itoa(int(exec.IoDepth)) + `
-pool=` + exec.Pool + `
-rbdname=` + exec.Volume
+pool=` + exec.DataPool + `
+rbdname=` + exec.DataVolume
 	return cfgData
 }
 func (conf *FioConfig) ConfigFileName() string {
 	return uuid.New().String() + "_" + conf.DiskType + "_" +
 		conf.OpType + "_" +
-		conf.Pool + "_" +
-		conf.Volume + "_" +
+		conf.DataPool + "_" +
+		conf.DataVolume + "_" +
 		conf.BlockSize + "_" +
 		strconv.Itoa(int(conf.IoDepth)) + "_" +
 		fmt.Sprintf("%f", conf.RecoveryLimit) + ".conf"
 }
 
 type FioResult struct {
-	FioConfig     *FioConfig
+	FioConfig      *FioConfig
 	DMClockJobList *log_analyze.DMClockJobList
 }
 
@@ -72,8 +74,8 @@ func (list FioResultList) ToCsv() string {
 			item.FioConfig.DiskType,
 			item.FioConfig.Runtime,
 			item.FioConfig.OpType,
-			item.FioConfig.Pool,
-			item.FioConfig.Volume,
+			item.FioConfig.DataPool,
+			item.FioConfig.DataVolume,
 			item.FioConfig.BlockSize,
 			item.FioConfig.IoDepth,
 			item.FioConfig.RecoveryLimit,
@@ -159,10 +161,9 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 }
 
 func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
-	_, err := c.Master.ExecCmd("ceph osd pool set " + conf.Pool + " size 1")
-	if err != nil {
-		return err
-	}
+	var (
+		err error
+	)
 
 	// 设置limit 最大, 这样recovery恢复最快
 	for _, osdNum := range conf.OsdNum {
@@ -170,6 +171,10 @@ func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
 		if err != nil {
 			return err
 		}
+	}
+	_, err = c.Master.ExecCmd("ceph osd pool set " + conf.RecoveryPool + " size 1")
+	if err != nil {
+		return err
 	}
 
 	count := 0
@@ -209,10 +214,7 @@ func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
 			break
 		}
 	}
-	_, err = c.Master.ExecCmd("ceph osd pool set " + conf.Pool + " size 2")
-	if err != nil {
-		return err
-	}
+
 	return nil
 }
 
@@ -221,9 +223,12 @@ type ExecConfig struct {
 	IpAddr   []string `json:"ipAddr"`
 	OsdNum   []int64  `json:"osdNum"`
 
-	Runtime       int64     `json:"runtime"`
-	Pool          string    `json:"pool"`
-	Volume        string    `json:"volume"`
+	Runtime        int64  `json:"runtime"`
+	DataPool       string `json:"dataPool"`
+	RecoveryPool   string `json:"recoveryPool"`
+	DataVolume     string `json:"dataVolume"`
+	RecoveryVolume string `json:"recoveryVolume"`
+
 	OpType        []string  `json:"opType"`
 	BlockSize     []string  `json:"blockSize"`
 	IoDepth       []int64   `json:"ioDepth"`
@@ -248,8 +253,8 @@ func ReadExecConfig(configFilePath string) (*ExecConfig, error) {
 
 func init() {
 	var logger = conflogger.Log{
-		Name:   "getAllCost",
-		Level:  "Debug",
+		Name:  "getAllCost",
+		Level: "Debug",
 	}
 	logger.SetDefaults()
 	logger.Init()
@@ -265,9 +270,8 @@ func main() {
 	if err != nil {
 		return
 	}
-	
+
 	// 连接集群
-	logrus.Infof("aaa")
 	cluster, err := cluster_client.NewCluster(execConfig.IpAddr)
 	if err != nil {
 		return
@@ -280,15 +284,17 @@ func main() {
 			for _, ioDepth := range execConfig.IoDepth {
 				for _, recoveryLimit := range execConfig.RecoveryLimit {
 					fioConfig := FioConfig{
-						DiskType:      execConfig.DiskType,
-						Runtime:       execConfig.Runtime,
-						OpType:        opType,
-						Pool:          execConfig.Pool,
-						Volume:        execConfig.Volume,
-						BlockSize:     blockSize,
-						IoDepth:       ioDepth,
-						RecoveryLimit: recoveryLimit,
-						OsdNum:        execConfig.OsdNum,
+						DiskType:       execConfig.DiskType,
+						Runtime:        execConfig.Runtime,
+						OpType:         opType,
+						RecoveryPool:   execConfig.RecoveryPool,
+						DataPool:       execConfig.DataPool,
+						DataVolume:     execConfig.DataVolume,
+						RecoveryVolume: execConfig.RecoveryVolume,
+						BlockSize:      blockSize,
+						IoDepth:        ioDepth,
+						RecoveryLimit:  recoveryLimit,
+						OsdNum:         execConfig.OsdNum,
 					}
 
 					// 等待对应的osd clean
@@ -305,6 +311,11 @@ func main() {
 						}
 					}
 
+					_, err = cluster.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
+					if err != nil {
+						return
+					}
+
 					// 开始执行任务
 					bsRes, err := fioConfig.Exec(cluster)
 					if err != nil {
@@ -314,7 +325,7 @@ func main() {
 					logrus.Warningf("fioConfig Result:%+v, ExpectCost:%f, ActualCost:%f", *bsRes.FioConfig,
 						(*bsRes).DMClockJobList.ExpectCost(),
 						(*bsRes).DMClockJobList.ActualCost(),
-						)
+					)
 					fioResultList = append(fioResultList, *bsRes)
 				}
 			}

@@ -101,7 +101,7 @@ func (cluster *Cluster) ClearCephLog() error {
 	return nil
 }
 
-func (cluster *Cluster) CollectOsdLog(dstDir string,osdNums []int64) error {
+func (cluster *Cluster) CollectOsdLog(dstDir string, osdNums []int64) error {
 	var (
 		err error
 	)
