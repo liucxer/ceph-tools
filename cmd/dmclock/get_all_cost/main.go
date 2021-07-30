@@ -165,6 +165,13 @@ func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
 		err error
 	)
 
+	for _, osdNum := range conf.OsdNum {
+		_, err = c.Master.ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+		if err != nil {
+			return err
+		}
+	}
+
 	// 设置limit 最大, 这样recovery恢复最快
 	for _, osdNum := range conf.OsdNum {
 		_, err = c.Master.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
@@ -260,6 +267,43 @@ func init() {
 	logger.Init()
 }
 
+func RunOneJob(cluster *cluster_client.Cluster, execConfig *ExecConfig, fioConfig *FioConfig) (*FioResult, error) {
+	var (
+		err error
+		res *FioResult
+	)
+	// 等待对应的osd clean
+	err = fioConfig.WaitOsdClean(cluster)
+	if err != nil {
+		return res, err
+	}
+
+	// 设置limit
+	for _, osdNum := range execConfig.OsdNum {
+		_, err = cluster.Master.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + fmt.Sprintf("%f", fioConfig.RecoveryLimit))
+		if err != nil {
+			return res, err
+		}
+	}
+
+	_, err = cluster.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
+	if err != nil {
+		return res, err
+	}
+
+	// 开始执行任务
+	res, err = fioConfig.Exec(cluster)
+	if err != nil {
+		return res, err
+	}
+
+	logrus.Warningf("fioConfig Result:%+v, ExpectCost:%f, ActualCost:%f", *res.FioConfig,
+		(*res).DMClockJobList.ExpectCost(),
+		(*res).DMClockJobList.ActualCost(),
+	)
+	return res, err
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Println("Usage:\n     ./cmd config.json")
@@ -283,7 +327,7 @@ func main() {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
 				for _, recoveryLimit := range execConfig.RecoveryLimit {
-					fioConfig := FioConfig{
+					fioConfig := &FioConfig{
 						DiskType:       execConfig.DiskType,
 						Runtime:        execConfig.Runtime,
 						OpType:         opType,
@@ -296,37 +340,13 @@ func main() {
 						RecoveryLimit:  recoveryLimit,
 						OsdNum:         execConfig.OsdNum,
 					}
-
-					// 等待对应的osd clean
-					err = fioConfig.WaitOsdClean(cluster)
+					bsRes, err := RunOneJob(cluster, execConfig, fioConfig)
 					if err != nil {
-						return
+						logrus.Warningf("fioConfig Result:%+v, failure, err:%v", fioConfig, err)
+					} else {
+						logrus.Warningf("fioConfig Result:%+v, success", fioConfig)
+						fioResultList = append(fioResultList, *bsRes)
 					}
-
-					// 设置limit
-					for _, osdNum := range execConfig.OsdNum {
-						_, err = cluster.Master.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + fmt.Sprintf("%f", recoveryLimit))
-						if err != nil {
-							return
-						}
-					}
-
-					_, err = cluster.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
-					if err != nil {
-						return
-					}
-
-					// 开始执行任务
-					bsRes, err := fioConfig.Exec(cluster)
-					if err != nil {
-						return
-					}
-
-					logrus.Warningf("fioConfig Result:%+v, ExpectCost:%f, ActualCost:%f", *bsRes.FioConfig,
-						(*bsRes).DMClockJobList.ExpectCost(),
-						(*bsRes).DMClockJobList.ActualCost(),
-					)
-					fioResultList = append(fioResultList, *bsRes)
 				}
 			}
 		}

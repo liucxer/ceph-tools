@@ -82,3 +82,10 @@ cat /home/liucx/hdd/get_all_cost_randrw/cost.log  |grep "fioConfig Result"
 cat /home/liucx/ssd/get_all_cost_read/cost.log  |grep "fioConfig Result"
 cat /home/liucx/ssd/get_all_cost_write/cost.log  |grep "fioConfig Result"
 cat /home/liucx/ssd/get_all_cost_randwrite/cost.log  |grep "fioConfig Result"
+
+
+nohup /home/liucx/get_all_cost /home/liucx/ssd_read/config.json > /home/liucx/ssd_read/config.json.log &
+nohup /home/liucx/get_all_cost /home/liucx/hdd_randrw/config1.json > /home/liucx/hdd_randrw/config1.json.log &
+nohup /home/liucx/get_all_cost /home/liucx/hdd_randrw/config2.json > /home/liucx/hdd_randrw/config2.json.log &
+nohup /home/liucx/get_all_cost /home/liucx/hdd_rw/config1.json > /home/liucx/hdd_rw/config1.json.log &
+nohup /home/liucx/get_all_cost /home/liucx/hdd_rw/config2.json > /home/liucx/hdd_rw/config2.json.log &

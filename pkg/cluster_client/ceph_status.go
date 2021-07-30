@@ -86,7 +86,7 @@ type OSDStatus struct {
 }
 
 func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
-	type OSDStatusResp struct {
+	type OSDPGResp struct {
 		PGStats []struct {
 			State string `json:"state"`
 		} `json:"pg_stats"`
@@ -97,18 +97,53 @@ func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
 		return nil, err
 	}
 
-	var osdStatusResp OSDStatusResp
-	err = json.Unmarshal(resp, &osdStatusResp)
+	var osdPGResp OSDPGResp
+	err = json.Unmarshal(resp, &osdPGResp)
 	if err != nil {
 		return nil, err
 	}
 
 	var res OSDStatus
 	res.ActiveClean = true
-	for _, pgStats := range osdStatusResp.PGStats {
+	for _, pgStats := range osdPGResp.PGStats {
 		if pgStats.State != "active+clean" {
 			res.ActiveClean = false
+			return &res, nil
 		}
+	}
+
+	type OSDStatusResp struct {
+		Nodes []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"nodes"`
+	}
+	resp, err = cluster.Clients[0].ExecCmd("ceph osd tree -f json")
+	if err != nil {
+		return nil, err
+	}
+
+	var osdStatusResp OSDStatusResp
+	err = json.Unmarshal(resp, &osdStatusResp)
+	if err != nil {
+		return nil, err
+	}
+
+	noExist := true
+	for _, node := range osdStatusResp.Nodes {
+		if node.Name != "osd."+strconv.Itoa(int(osdNum)) {
+			continue
+		}
+		noExist = false
+		if node.Status != "up" {
+			res.ActiveClean = false
+			return &res, nil
+		}
+	}
+
+	if noExist {
+		res.ActiveClean = false
+		return &res, nil
 	}
 
 	return &res, nil
