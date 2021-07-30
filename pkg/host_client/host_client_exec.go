@@ -25,6 +25,9 @@ func (client *HostClient) ExecCmd(cmd string) ([]byte, error) {
 
 	combo, err := sshSession.CombinedOutput(cmd)
 	result = string(combo)
+	if len(result) > 300 {
+		result = result[:200]
+	}
 	if err != nil {
 		logrus.Errorf("session.CombinedOutput error [host:%s, err:%v, cmd:%s]", client.IpAddr, err, cmd)
 		return nil, err

@@ -86,31 +86,8 @@ type OSDStatus struct {
 }
 
 func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
-	type OSDPGResp struct {
-		PGStats []struct {
-			State string `json:"state"`
-		} `json:"pg_stats"`
-	}
-
-	resp, err := cluster.Clients[0].ExecCmd("ceph pg ls-by-osd " + strconv.Itoa(int(osdNum)) + " -f json")
-	if err != nil {
-		return nil, err
-	}
-
-	var osdPGResp OSDPGResp
-	err = json.Unmarshal(resp, &osdPGResp)
-	if err != nil {
-		return nil, err
-	}
-
 	var res OSDStatus
 	res.ActiveClean = true
-	for _, pgStats := range osdPGResp.PGStats {
-		if pgStats.State != "active+clean" {
-			res.ActiveClean = false
-			return &res, nil
-		}
-	}
 
 	type OSDStatusResp struct {
 		Nodes []struct {
@@ -118,7 +95,7 @@ func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
 			Status string `json:"status"`
 		} `json:"nodes"`
 	}
-	resp, err = cluster.Clients[0].ExecCmd("ceph osd tree -f json")
+	resp, err := cluster.Master.ExecCmd("ceph osd tree -f json")
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +121,31 @@ func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
 	if noExist {
 		res.ActiveClean = false
 		return &res, nil
+	}
+
+
+	type OSDPGResp struct {
+		PGStats []struct {
+			State string `json:"state"`
+		} `json:"pg_stats"`
+	}
+
+	resp, err = cluster.Master.ExecCmd("ceph pg ls-by-osd " + strconv.Itoa(int(osdNum)) + " -f json")
+	if err != nil {
+		return nil, err
+	}
+
+	var osdPGResp OSDPGResp
+	err = json.Unmarshal(resp, &osdPGResp)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, pgStats := range osdPGResp.PGStats {
+		if pgStats.State != "active+clean" {
+			res.ActiveClean = false
+			return &res, nil
+		}
 	}
 
 	return &res, nil

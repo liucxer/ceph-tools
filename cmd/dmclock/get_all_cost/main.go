@@ -58,11 +58,29 @@ func (conf *FioConfig) ConfigFileName() string {
 }
 
 type FioResult struct {
-	FioConfig      *FioConfig
-	DMClockJobList *log_analyze.DMClockJobList
+	FioConfig  *FioConfig
+	ExpectCost float64
+	ActualCost float64
 }
 
 type FioResultList []FioResult
+
+func (item FioResult) ToCsv() string {
+	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f ,%f, %f",
+		item.FioConfig.DiskType,
+		item.FioConfig.Runtime,
+		item.FioConfig.OpType,
+		item.FioConfig.DataPool,
+		item.FioConfig.DataVolume,
+		item.FioConfig.BlockSize,
+		item.FioConfig.IoDepth,
+		item.FioConfig.RecoveryLimit,
+		item.ExpectCost,
+		item.ActualCost,
+	)
+
+	return itemStr
+}
 
 func (list FioResultList) ToCsv() string {
 	var res = ""
@@ -79,8 +97,8 @@ func (list FioResultList) ToCsv() string {
 			item.FioConfig.BlockSize,
 			item.FioConfig.IoDepth,
 			item.FioConfig.RecoveryLimit,
-			item.DMClockJobList.ExpectCost(),
-			item.DMClockJobList.ActualCost(),
+			item.ExpectCost,
+			item.ActualCost,
 		)
 		res = res + itemStr + "\n"
 	}
@@ -156,7 +174,8 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 	}
 
 	res.FioConfig = fioConfig
-	res.DMClockJobList = dmClockJobList
+	res.ExpectCost = dmClockJobList.ExpectCost()
+	res.ActualCost = dmClockJobList.ActualCost()
 	return &res, err
 }
 
@@ -297,10 +316,7 @@ func RunOneJob(cluster *cluster_client.Cluster, execConfig *ExecConfig, fioConfi
 		return res, err
 	}
 
-	logrus.Warningf("fioConfig Result:%+v, ExpectCost:%f, ActualCost:%f", *res.FioConfig,
-		(*res).DMClockJobList.ExpectCost(),
-		(*res).DMClockJobList.ActualCost(),
-	)
+	fmt.Println("RunOneJob res:", res.ToCsv())
 	return res, err
 }
 
@@ -321,6 +337,8 @@ func main() {
 		return
 	}
 	defer func() { _ = cluster.Close() }()
+
+	_ = cluster.ExecCmd("killall fio")
 
 	var fioResultList FioResultList
 	for _, opType := range execConfig.OpType {
