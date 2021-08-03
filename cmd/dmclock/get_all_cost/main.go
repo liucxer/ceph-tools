@@ -6,12 +6,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/liucxer/ceph-tools/cmd/dmclock/log_analyze"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
+	"github.com/liucxer/ceph-tools/pkg/fio"
 	"github.com/liucxer/confmiddleware/conflogger"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -61,12 +61,14 @@ type FioResult struct {
 	FioConfig  *FioConfig
 	ExpectCost float64
 	ActualCost float64
+	ReadIops   float64
+	WriteIops  float64
 }
 
 type FioResultList []FioResult
 
 func (item FioResult) ToCsv() string {
-	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,%f",
+	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,%f,%f,%f",
 		item.FioConfig.DiskType,
 		item.FioConfig.Runtime,
 		item.FioConfig.OpType,
@@ -77,6 +79,8 @@ func (item FioResult) ToCsv() string {
 		item.FioConfig.RecoveryLimit,
 		item.ExpectCost,
 		item.ActualCost,
+		item.ReadIops,
+		item.WriteIops,
 	)
 
 	return itemStr
@@ -85,10 +89,10 @@ func (item FioResult) ToCsv() string {
 func (list FioResultList) ToCsv() string {
 	var res = ""
 	header := "diskType, runtime, opType, pool, volume, blockSize, ioDepth, recoveryLimit" +
-		"expectCost,actualCost,"
+		"expectCost,actualCost,readIops,writeIops"
 	res = res + header + "\n"
 	for _, item := range list {
-		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,%f",
+		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,%f,%f,%f",
 			item.FioConfig.DiskType,
 			item.FioConfig.Runtime,
 			item.FioConfig.OpType,
@@ -99,6 +103,8 @@ func (list FioResultList) ToCsv() string {
 			item.FioConfig.RecoveryLimit,
 			item.ExpectCost,
 			item.ActualCost,
+			item.ReadIops,
+			item.WriteIops,
 		)
 		res = res + itemStr + "\n"
 	}
@@ -131,35 +137,18 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 		}
 	}()
 
-	// 创建配置文件
-	bsFilePath := fioConfig.ConfigFileName()
-	_, err = c.Master.ExecCmd("touch " + bsFilePath)
+	fioObject := fio.Fio{
+		OpType:    fioConfig.OpType,
+		Runtime:   fioConfig.Runtime,
+		BlockSize: fioConfig.BlockSize,
+		IoDepth:   fioConfig.IoDepth,
+		Pool:      fioConfig.DataPool,
+		RbdName:   fioConfig.DataVolume,
+	}
+	fioResult, err := fioObject.Exec(c.Master)
 	if err != nil {
 		return nil, err
 	}
-	_, err = c.Master.ExecCmd("echo '" + fioConfig.Config() + "' > " + bsFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		// 删除配置文件
-		_, err = c.Master.ExecCmd("rm " + bsFilePath)
-		if err != nil {
-			return
-		}
-	}()
-
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go func() {
-		// 执行fio命令
-		_, _ = c.Master.ExecCmd("fio " + bsFilePath +" --output=./" + bsFilePath + ".log")
-		wg.Done()
-	}()
-
-	wg.Wait()
 
 	// 收集日志
 	err = c.CollectOsdLog(tmpDir, fioConfig.OsdNum)
@@ -176,6 +165,8 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 	res.FioConfig = fioConfig
 	res.ExpectCost = dmClockJobList.ExpectCost()
 	res.ActualCost = dmClockJobList.ActualCost()
+	res.ReadIops = fioResult.ReadIops
+	res.WriteIops = fioResult.WriteIops
 	return &res, err
 }
 
@@ -338,8 +329,6 @@ func main() {
 	}
 	defer func() { _ = cluster.Close() }()
 
-	_ = cluster.ExecCmd("killall fio")
-
 	var fioResultList FioResultList
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
@@ -360,7 +349,7 @@ func main() {
 					}
 					bsRes, err := RunOneJob(cluster, execConfig, fioConfig)
 					if err != nil {
-						logrus.Warningf("fioConfig Result:%+v, failure, err:%v", fioConfig, err)
+						logrus.Errorf("fioConfig Result:%+v, failure, err:%v", fioConfig, err)
 					} else {
 						logrus.Warningf("fioConfig Result:%+v, success", fioConfig)
 						fioResultList = append(fioResultList, *bsRes)

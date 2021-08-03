@@ -75,8 +75,8 @@ func (list ResultValueList) Best(toleranceScope float64) ResultValue {
 
 	for _, item := range list {
 		subData := item.ActualCost - minResult.ActualCost
-		absData := math.Abs(subData/minResult.ActualCost)
-		if absData < toleranceScope && item.RecoveryLimit > minResult.RecoveryLimit  {
+		absData := math.Abs(subData / minResult.ActualCost)
+		if absData < toleranceScope && item.RecoveryLimit > minResult.RecoveryLimit {
 			minResult.RecoveryLimit = item.RecoveryLimit
 		}
 	}
@@ -133,7 +133,7 @@ func ReadCostFile(costFilePath string, toleranceScope float64) ([]Result, error)
 			return nil, err
 		}
 
-		if items[7] == "NaN" || items[8] == "NaN" || items[9] == "NaN"{
+		if items[7] == "NaN" || items[8] == "NaN" || items[9] == "NaN" {
 			continue
 		}
 
@@ -210,7 +210,6 @@ func main() {
 	toleranceScope := 0.3
 	costFile := "/Users/liucx/Desktop/QOS/cost和limit测试/all.csv"
 
-
 	resList, err := GetBestLimit(costFile, toleranceScope)
 	if err != nil {
 		return
@@ -218,11 +217,11 @@ func main() {
 	fmt.Println("DiskType, OpType, BlockSize, IoDepth, RecoveryLimit, ExpectCost, ActualCost")
 	for _, value := range resList {
 		fmt.Println(value.DiskType, ",",
-			value.OpType,",",
-			value.BlockSize,",",
-			value.IoDepth,",",
-			value.RecoveryLimit,",",
-			value.ExpectCost,",",
+			value.OpType, ",",
+			value.BlockSize, ",",
+			value.IoDepth, ",",
+			value.RecoveryLimit, ",",
+			value.ExpectCost, ",",
 			value.ActualCost)
 	}
 	//resultKey := ResultKey{
