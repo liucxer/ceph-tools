@@ -123,7 +123,6 @@ func (cluster *Cluster) OsdStatus(osdNum int64) (*OSDStatus, error) {
 		return &res, nil
 	}
 
-
 	type OSDPGResp struct {
 		PGStats []struct {
 			State string `json:"state"`

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"ceph-tools/pkg/cluster_client"
 	"fmt"
+	"github.com/liucxer/ceph-tools/pkg/cluster_client"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
@@ -424,7 +424,7 @@ func Detect(c *cluster_client.Cluster) (float64, error) {
 func SetLimit(c *cluster_client.Cluster, limit string) (float64, error) {
 	for i := 0; i < 12; i++ {
 		cmdStr := "ceph daemon osd." + strconv.Itoa(i) + " config set osd_op_queue_mclock_recov_lim " + limit
-		c.Clients[0].Host.ExecCmd(cmdStr)
+		c.Master.ExecCmd(cmdStr)
 	}
 	return 0, nil
 }

@@ -66,7 +66,7 @@ type FioResult struct {
 type FioResultList []FioResult
 
 func (item FioResult) ToCsv() string {
-	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f ,%f, %f",
+	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,%f",
 		item.FioConfig.DiskType,
 		item.FioConfig.Runtime,
 		item.FioConfig.OpType,
@@ -88,7 +88,7 @@ func (list FioResultList) ToCsv() string {
 		"expectCost,actualCost,"
 	res = res + header + "\n"
 	for _, item := range list {
-		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f ,%f, %f",
+		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,%f",
 			item.FioConfig.DiskType,
 			item.FioConfig.Runtime,
 			item.FioConfig.OpType,
@@ -155,7 +155,7 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 	wg.Add(1)
 	go func() {
 		// 执行fio命令
-		_, _ = c.Master.ExecCmd("fio " + bsFilePath)
+		_, _ = c.Master.ExecCmd("fio " + bsFilePath +" --output=./" + bsFilePath + ".log")
 		wg.Done()
 	}()
 
