@@ -29,34 +29,6 @@ type FioConfig struct {
 	RecoveryLimit  float64 `json:"recoveryLimit"`
 }
 
-func (exec *FioConfig) Config() string {
-	cfgData := `[global]
-ioengine=rbd
-clientname=admin
-invalidate=0
-time_based
-direct=1
-group_reporting
-
-[write]
-rw=` + exec.OpType + `
-runtime=` + strconv.Itoa(int(exec.Runtime)) + `
-bs=` + exec.BlockSize + `
-iodepth=` + strconv.Itoa(int(exec.IoDepth)) + `
-pool=` + exec.DataPool + `
-rbdname=` + exec.DataVolume
-	return cfgData
-}
-func (conf *FioConfig) ConfigFileName() string {
-	return uuid.New().String() + "_" + conf.DiskType + "_" +
-		conf.OpType + "_" +
-		conf.DataPool + "_" +
-		conf.DataVolume + "_" +
-		conf.BlockSize + "_" +
-		strconv.Itoa(int(conf.IoDepth)) + "_" +
-		fmt.Sprintf("%f", conf.RecoveryLimit) + ".conf"
-}
-
 type FioResult struct {
 	FioConfig  *FioConfig
 	ExpectCost float64
@@ -171,27 +143,20 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 }
 
 func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
-	var (
-		err error
-	)
-
 	for _, osdNum := range conf.OsdNum {
-		_, err = c.Master.ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
-		if err != nil {
-			return err
+		for _, node := range c.Clients {
+			_, _ = node.ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
 		}
 	}
 
 	// 设置limit 最大, 这样recovery恢复最快
 	for _, osdNum := range conf.OsdNum {
-		_, err = c.Master.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
-		if err != nil {
-			return err
+		for _, node := range c.Clients {
+			_, _ = node.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
 		}
 	}
-	_, err = c.Master.ExecCmd("ceph osd pool set " + conf.RecoveryPool + " size 1")
-	if err != nil {
-		return err
+	for _, node := range c.Clients {
+		_, _ = node.ExecCmd("ceph osd pool set " + conf.RecoveryPool + " size 1")
 	}
 
 	count := 0
@@ -290,15 +255,13 @@ func RunOneJob(cluster *cluster_client.Cluster, execConfig *ExecConfig, fioConfi
 
 	// 设置limit
 	for _, osdNum := range execConfig.OsdNum {
-		_, err = cluster.Master.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + fmt.Sprintf("%f", fioConfig.RecoveryLimit))
-		if err != nil {
-			return res, err
+		for _, node := range cluster.Clients {
+			_, _ = node.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + fmt.Sprintf("%f", fioConfig.RecoveryLimit))
 		}
 	}
 
-	_, err = cluster.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
-	if err != nil {
-		return res, err
+	for _, node := range cluster.Clients {
+		_, _ = node.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
 	}
 
 	// 开始执行任务

@@ -18,6 +18,8 @@ type Result struct {
 	RecoveryLimit float64 `json:"recoveryLimit"`
 	ExpectCost    float64 `json:"expectCost"`
 	ActualCost    float64 `json:"actualCost"`
+	ReadIops    float64 `json:"readIops"`
+	WriteIops    float64 `json:"writeIops"`
 }
 
 type ResultList []Result
@@ -61,6 +63,9 @@ type ResultValue struct {
 	RecoveryLimit float64 `json:"recoveryLimit"`
 	ExpectCost    float64 `json:"expectCost"`
 	ActualCost    float64 `json:"actualCost"`
+	ReadIops    float64 `json:"readIops"`
+	WriteIops    float64 `json:"writeIops"`
+	TotalIops float64 `json:"totalIops"`
 }
 
 type ResultValueList []ResultValue
@@ -68,14 +73,14 @@ type ResultValueList []ResultValue
 func (list ResultValueList) Best(toleranceScope float64) ResultValue {
 	minResult := list[0]
 	for _, item := range list {
-		if item.ActualCost < minResult.ActualCost {
+		if item.TotalIops > minResult.TotalIops {
 			minResult = item
 		}
 	}
 
 	for _, item := range list {
-		subData := item.ActualCost - minResult.ActualCost
-		absData := math.Abs(subData / minResult.ActualCost)
+		subData := item.TotalIops - minResult.TotalIops
+		absData := math.Abs(subData / minResult.TotalIops)
 		if absData < toleranceScope && item.RecoveryLimit > minResult.RecoveryLimit {
 			minResult.RecoveryLimit = item.RecoveryLimit
 		}
@@ -118,33 +123,43 @@ func ReadCostFile(costFilePath string, toleranceScope float64) ([]Result, error)
 		var resItem Result
 
 		resItem.DiskType = items[0]
-		resItem.OpType = items[2]
-		resItem.BlockSize = items[5]
+		resItem.OpType = items[1]
+		resItem.BlockSize = items[2]
 
-		ioDepth, err := strconv.Atoi(items[6])
+		ioDepth, err := strconv.Atoi(items[3])
 		if err != nil {
 			logrus.Errorf("strconv.Atoi, err:%v", err)
 			return nil, err
 		}
 		resItem.IoDepth = int64(ioDepth)
-		resItem.RecoveryLimit, err = strconv.ParseFloat(strings.Trim(items[7], " "), 64)
+		resItem.RecoveryLimit, err = strconv.ParseFloat(strings.Trim(items[4], " "), 64)
 		if err != nil {
 			logrus.Errorf("strconv.ParseFloat, err:%v", err)
 			return nil, err
 		}
 
-		if items[7] == "NaN" || items[8] == "NaN" || items[9] == "NaN" {
-			continue
-		}
 
-		expectCostStr := strings.Trim(strings.Trim(items[8], " "), "\r")
+		expectCostStr := strings.Trim(strings.Trim(items[5], " "), "\r")
 		resItem.ExpectCost, err = strconv.ParseFloat(expectCostStr, 64)
 		if err != nil {
 			logrus.Errorf("strconv.ParseFloat, err:%v", err)
 			return nil, err
 		}
-		actualCostStr := strings.Trim(strings.Trim(items[9], " "), "\r")
+		actualCostStr := strings.Trim(strings.Trim(items[6], " "), "\r")
 		resItem.ActualCost, err = strconv.ParseFloat(actualCostStr, 64)
+		if err != nil {
+			logrus.Errorf("strconv.ParseFloat, err:%v", err)
+			return nil, err
+		}
+
+		readIopsStr := strings.Trim(strings.Trim(items[7], " "), "\r")
+		resItem.ReadIops, err = strconv.ParseFloat(readIopsStr, 64)
+		if err != nil {
+			logrus.Errorf("strconv.ParseFloat, err:%v", err)
+			return nil, err
+		}
+		writeIopsStr := strings.Trim(strings.Trim(items[8], " "), "\r")
+		resItem.WriteIops, err = strconv.ParseFloat(writeIopsStr, 64)
 		if err != nil {
 			logrus.Errorf("strconv.ParseFloat, err:%v", err)
 			return nil, err
@@ -173,6 +188,9 @@ func GetBestLimit(costFile string, toleranceScope float64) (ResultList, error) {
 			RecoveryLimit: result.RecoveryLimit,
 			ExpectCost:    result.ExpectCost,
 			ActualCost:    result.ActualCost,
+			ReadIops: result.ReadIops,
+			WriteIops: result.WriteIops,
+			TotalIops: result.ReadIops + result.WriteIops,
 		}
 
 		_, ok := resultMap[resultKey]
@@ -203,12 +221,12 @@ func GetBestLimit(costFile string, toleranceScope float64) (ResultList, error) {
 	}
 
 	sort.Sort(resList)
-	return resultList, nil
+	return resList, nil
 }
 
 func main() {
-	toleranceScope := 0.3
-	costFile := "/Users/liucx/Desktop/QOS/cost和limit测试/all.csv"
+	toleranceScope := 0.2
+	costFile := "/Users/liucx/Desktop/merge.csv"
 
 	resList, err := GetBestLimit(costFile, toleranceScope)
 	if err != nil {

@@ -1,0 +1,14 @@
+{
+  "diskType": "hdd",
+  "recoveryPool": "hdd_rb1_pool",
+  "recoveryVolume": "image",
+  "dataPool": "hdd_1_pool",
+  "dataVolume": "image",
+  "runtime": 10,
+  "ipAddr": ["10.0.9.156"],
+  "osdNum": [0,1],
+  "opType": ["write"],
+  "blockSize": ["4M", "2M", "1M", "256k", "64k", "32k", "4k"],
+  "ioDepth": [512, 256, 128, 64, 32, 16, 8, 1],
+  "recoveryLimit": [2000, 1500, 1000, 500, 316, 158, 1]
+}
