@@ -9,17 +9,17 @@ import (
 )
 
 type ResultKey struct {
-	DiskType  string `json:"diskType"`
-	OpType    string `json:"opType"`
-	BlockSize string `json:"blockSize"`
-	IoDepth   int64  `json:"ioDepth"`
+	DiskType      string  `json:"diskType"`
+	OpType        string  `json:"opType"`
+	BlockSize     string  `json:"blockSize"`
+	IoDepth       int64   `json:"ioDepth"`
 	RecoveryLimit float64 `json:"recoveryLimit"`
 }
 type ResultValue struct {
-	ExpectCost    float64 `json:"expectCost"`
-	ActualCost    float64 `json:"actualCost"`
-	ReadIops      float64 `json:"readIops"`
-	WriteIops     float64 `json:"writeIops"`
+	ExpectCost float64 `json:"expectCost"`
+	ActualCost float64 `json:"actualCost"`
+	ReadIops   float64 `json:"readIops"`
+	WriteIops  float64 `json:"writeIops"`
 }
 
 type Result struct {
@@ -164,11 +164,11 @@ func DataMerge(costData, IopsData []Result) []Result {
 	iopsMap := map[ResultKey]ResultValue{}
 	for _, v := range costData {
 		resultKey := ResultKey{
-			DiskType: v.DiskType,
-			OpType: v.OpType,
-			BlockSize:v.BlockSize,
-			IoDepth:v.IoDepth,
-			RecoveryLimit:v.RecoveryLimit,
+			DiskType:      v.DiskType,
+			OpType:        v.OpType,
+			BlockSize:     v.BlockSize,
+			IoDepth:       v.IoDepth,
+			RecoveryLimit: v.RecoveryLimit,
 		}
 
 		resultValue := ResultValue{
@@ -180,15 +180,15 @@ func DataMerge(costData, IopsData []Result) []Result {
 
 	for _, v := range IopsData {
 		resultKey := ResultKey{
-			DiskType: v.DiskType,
-			OpType: v.OpType,
-			BlockSize:v.BlockSize,
-			IoDepth:v.IoDepth,
-			RecoveryLimit:v.RecoveryLimit,
+			DiskType:      v.DiskType,
+			OpType:        v.OpType,
+			BlockSize:     v.BlockSize,
+			IoDepth:       v.IoDepth,
+			RecoveryLimit: v.RecoveryLimit,
 		}
 
 		resultValue := ResultValue{
-			ReadIops: v.ReadIops,
+			ReadIops:  v.ReadIops,
 			WriteIops: v.WriteIops,
 		}
 		iopsMap[resultKey] = resultValue
@@ -204,7 +204,7 @@ func DataMerge(costData, IopsData []Result) []Result {
 
 	var res []Result
 	for key, value := range iopsMap {
-		if value.ActualCost !=0 && value.ExpectCost != 0 &&
+		if value.ActualCost != 0 && value.ExpectCost != 0 &&
 			(value.WriteIops != 0 || value.ReadIops != 0) {
 			item := Result{}
 			item.ResultKey = key

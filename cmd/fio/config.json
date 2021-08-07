@@ -1,0 +1,10 @@
+{
+  "diskType": "hdd",
+  "dataPool": "hdd_end_pool",
+  "dataVolume": "image",
+  "runtime": 10,
+  "ipAddr": "10.0.20.27",
+  "opType": ["write"],
+  "blockSize": ["4M"],
+  "ioDepth": [64]
+}

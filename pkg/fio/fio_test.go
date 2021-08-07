@@ -15,7 +15,7 @@ func TestFioConfig_Exec(t *testing.T) {
 	require.NoError(t, err)
 	defer hostClient.Close()
 
-	conf := fio.FioConfig{
+	conf := fio.Fio{
 		OpType:    "read",
 		Runtime:   10,
 		BlockSize: "4M",

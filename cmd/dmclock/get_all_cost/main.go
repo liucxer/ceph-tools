@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/liucxer/ceph-tools/cmd/dmclock/log_analyze"
+	"github.com/liucxer/ceph-tools/pkg/ceph"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
 	"github.com/liucxer/ceph-tools/pkg/fio"
+	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/liucxer/confmiddleware/conflogger"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
@@ -143,20 +145,27 @@ func (fioConfig *FioConfig) Exec(c *cluster_client.Cluster) (*FioResult, error) 
 }
 
 func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
+	var (
+		err error
+	)
 	for _, osdNum := range conf.OsdNum {
-		for _, node := range c.Clients {
-			_, _ = node.ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+		_, err = globalConfig.OsdMap[osdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+		if err != nil {
+			return err
 		}
 	}
 
 	// 设置limit 最大, 这样recovery恢复最快
 	for _, osdNum := range conf.OsdNum {
-		for _, node := range c.Clients {
-			_, _ = node.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
+		_, err = globalConfig.OsdMap[osdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
+		if err != nil {
+			return err
 		}
 	}
-	for _, node := range c.Clients {
-		_, _ = node.ExecCmd("ceph osd pool set " + conf.RecoveryPool + " size 1")
+
+	_, err = c.Master.ExecCmd("ceph osd pool set " + conf.RecoveryPool + " size 1")
+	if err != nil {
+		return err
 	}
 
 	count := 0
@@ -177,7 +186,7 @@ func (conf *FioConfig) WaitOsdClean(c *cluster_client.Cluster) error {
 
 		// 等待数据删除
 		for _, osdNum := range conf.OsdNum {
-			osdPerf, err := c.CurrentOSDPerf("osd." + strconv.Itoa(int(osdNum)))
+			osdPerf, err := globalConfig.OsdMap[osdNum].OSDPerf("osd." + strconv.Itoa(int(osdNum)))
 			if err != nil {
 				return err
 			}
@@ -215,22 +224,23 @@ type ExecConfig struct {
 	BlockSize     []string  `json:"blockSize"`
 	IoDepth       []int64   `json:"ioDepth"`
 	RecoveryLimit []float64 `json:"recoveryLimit"`
+
+	cluster *cluster_client.Cluster
 }
 
-func ReadExecConfig(configFilePath string) (*ExecConfig, error) {
+func (execConfig *ExecConfig) ReadConfig(configFilePath string) error {
 	bts, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		logrus.Errorf("ioutil.ReadFile err:%v", err)
-		return nil, err
+		return err
 	}
 
-	var conf ExecConfig
-	err = json.Unmarshal(bts, &conf)
+	err = json.Unmarshal(bts, execConfig)
 	if err != nil {
 		logrus.Errorf("json.Unmarshal err:%v", err)
-		return nil, err
+		return err
 	}
-	return &conf, err
+	return err
 }
 
 func init() {
@@ -242,30 +252,33 @@ func init() {
 	logger.Init()
 }
 
-func RunOneJob(cluster *cluster_client.Cluster, execConfig *ExecConfig, fioConfig *FioConfig) (*FioResult, error) {
+func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error) {
 	var (
 		err error
 		res *FioResult
 	)
 	// 等待对应的osd clean
-	err = fioConfig.WaitOsdClean(cluster)
+	err = fioConfig.WaitOsdClean(execConfig.cluster)
 	if err != nil {
 		return res, err
 	}
 
 	// 设置limit
 	for _, osdNum := range execConfig.OsdNum {
-		for _, node := range cluster.Clients {
-			_, _ = node.ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + fmt.Sprintf("%f", fioConfig.RecoveryLimit))
+		_, err = globalConfig.OsdMap[osdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + fmt.Sprintf("%f", fioConfig.RecoveryLimit))
+		if err != nil {
+			return res, err
 		}
 	}
 
-	for _, node := range cluster.Clients {
-		_, _ = node.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
+	time.Sleep(10 * time.Second)
+	_, err = execConfig.cluster.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
+	if err != nil {
+		return res, err
 	}
 
 	// 开始执行任务
-	res, err = fioConfig.Exec(cluster)
+	res, err = fioConfig.Exec(execConfig.cluster)
 	if err != nil {
 		return res, err
 	}
@@ -274,25 +287,11 @@ func RunOneJob(cluster *cluster_client.Cluster, execConfig *ExecConfig, fioConfi
 	return res, err
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage:\n     ./cmd config.json")
-		return
-	}
-
-	execConfig, err := ReadExecConfig(os.Args[1])
-	if err != nil {
-		return
-	}
-
-	// 连接集群
-	cluster, err := cluster_client.NewCluster(execConfig.IpAddr)
-	if err != nil {
-		return
-	}
-	defer func() { _ = cluster.Close() }()
-
-	var fioResultList FioResultList
+func (execConfig *ExecConfig) Run() (*FioResultList, error) {
+	var (
+		err           error
+		fioResultList FioResultList
+	)
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
@@ -310,7 +309,7 @@ func main() {
 						RecoveryLimit:  recoveryLimit,
 						OsdNum:         execConfig.OsdNum,
 					}
-					bsRes, err := RunOneJob(cluster, execConfig, fioConfig)
+					bsRes, err := execConfig.RunOneJob(fioConfig)
 					if err != nil {
 						logrus.Errorf("fioConfig Result:%+v, failure, err:%v", fioConfig, err)
 					} else {
@@ -320,6 +319,70 @@ func main() {
 				}
 			}
 		}
+	}
+	return &fioResultList, err
+}
+
+type GlobalConfig struct {
+	OsdMap map[int64]*host_client.HostClient
+}
+
+var (
+	globalConfig = GlobalConfig{}
+)
+
+func InitGlobalConfig(cluster *cluster_client.Cluster, osdNums []int64) error {
+	var (
+		err error
+	)
+
+	globalConfig.OsdMap = map[int64]*host_client.HostClient{}
+	for _, osdNum := range osdNums {
+		ip, err := ceph.GetOSDIp(cluster.Master, osdNum)
+		if err != nil {
+			return err
+		}
+		hostClient, err := host_client.NewHostClient(ip)
+		if err != nil {
+			return err
+		}
+		globalConfig.OsdMap[osdNum] = hostClient
+	}
+
+	for key, osd := range globalConfig.OsdMap {
+		fmt.Println(key, osd.IpAddr)
+	}
+	return err
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		fmt.Println("Usage:\n     ./cmd config.json")
+		return
+	}
+
+	execConfig := ExecConfig{}
+	err := execConfig.ReadConfig(os.Args[1])
+	if err != nil {
+		return
+	}
+
+	// 连接集群
+	cluster, err := cluster_client.NewCluster(execConfig.IpAddr)
+	if err != nil {
+		return
+	}
+	defer func() { _ = cluster.Close() }()
+
+	err = InitGlobalConfig(cluster, execConfig.OsdNum)
+	if err != nil {
+		return
+	}
+
+	execConfig.cluster = cluster
+	fioResultList, err := execConfig.Run()
+	if err != nil {
+		return
 	}
 
 	csv := fioResultList.ToCsv()

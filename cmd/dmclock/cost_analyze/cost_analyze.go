@@ -18,8 +18,8 @@ type Result struct {
 	RecoveryLimit float64 `json:"recoveryLimit"`
 	ExpectCost    float64 `json:"expectCost"`
 	ActualCost    float64 `json:"actualCost"`
-	ReadIops    float64 `json:"readIops"`
-	WriteIops    float64 `json:"writeIops"`
+	ReadIops      float64 `json:"readIops"`
+	WriteIops     float64 `json:"writeIops"`
 }
 
 type ResultList []Result
@@ -63,9 +63,9 @@ type ResultValue struct {
 	RecoveryLimit float64 `json:"recoveryLimit"`
 	ExpectCost    float64 `json:"expectCost"`
 	ActualCost    float64 `json:"actualCost"`
-	ReadIops    float64 `json:"readIops"`
-	WriteIops    float64 `json:"writeIops"`
-	TotalIops float64 `json:"totalIops"`
+	ReadIops      float64 `json:"readIops"`
+	WriteIops     float64 `json:"writeIops"`
+	TotalIops     float64 `json:"totalIops"`
 }
 
 type ResultValueList []ResultValue
@@ -138,7 +138,6 @@ func ReadCostFile(costFilePath string, toleranceScope float64) ([]Result, error)
 			return nil, err
 		}
 
-
 		expectCostStr := strings.Trim(strings.Trim(items[5], " "), "\r")
 		resItem.ExpectCost, err = strconv.ParseFloat(expectCostStr, 64)
 		if err != nil {
@@ -188,9 +187,9 @@ func GetBestLimit(costFile string, toleranceScope float64) (ResultList, error) {
 			RecoveryLimit: result.RecoveryLimit,
 			ExpectCost:    result.ExpectCost,
 			ActualCost:    result.ActualCost,
-			ReadIops: result.ReadIops,
-			WriteIops: result.WriteIops,
-			TotalIops: result.ReadIops + result.WriteIops,
+			ReadIops:      result.ReadIops,
+			WriteIops:     result.WriteIops,
+			TotalIops:     result.ReadIops + result.WriteIops,
 		}
 
 		_, ok := resultMap[resultKey]

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/liucxer/ceph-tools/pkg/interfacer"
 	"strconv"
 )
 
@@ -89,11 +90,7 @@ type FioResult struct {
 	WriteClat99    float64 `json:"writeClat99"`
 }
 
-type Worker interface {
-	ExecCmd(cmd string) ([]byte, error)
-}
-
-func (conf *Fio) Exec(worker Worker) (*FioResult, error) {
+func (conf *Fio) Exec(worker interfacer.Worker) (*FioResult, error) {
 	var (
 		res FioResult
 		err error

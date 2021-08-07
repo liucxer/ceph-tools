@@ -4,11 +4,11 @@
   "recoveryVolume": "image",
   "dataPool": "hdd_1_pool",
   "dataVolume": "image",
-  "runtime": 10,
+  "runtime": 100,
   "ipAddr": ["10.0.20.27"],
   "osdNum": [0,1],
   "opType": ["write"],
-  "blockSize": ["4M", "2M", "1M", "256k", "64k", "32k", "4k"],
-  "ioDepth": [512, 256, 128, 64, 32, 16, 8, 1],
-  "recoveryLimit": [2000, 1500, 1000, 500, 316, 158, 1]
+  "blockSize": ["4M"],
+  "ioDepth": [1],
+  "recoveryLimit": [1,100,200]
 }
