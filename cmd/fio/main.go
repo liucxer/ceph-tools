@@ -12,19 +12,17 @@ import (
 )
 
 type FioConfig struct {
-	DiskType       string  `json:"diskType"`
-	Runtime        int64   `json:"runtime"`
-	OpType         string  `json:"opType"`
-	DataPool       string  `json:"dataPool"`
-	DataVolume     string  `json:"dataVolume"`
-	BlockSize      string  `json:"blockSize"`
-	IoDepth        int64   `json:"ioDepth"`
+	DiskType   string `json:"diskType"`
+	Runtime    int64  `json:"runtime"`
+	OpType     string `json:"opType"`
+	DataPool   string `json:"dataPool"`
+	DataVolume string `json:"dataVolume"`
+	BlockSize  string `json:"blockSize"`
+	IoDepth    int64  `json:"ioDepth"`
 }
 
 type FioResult struct {
 	FioConfig  *FioConfig
-	ExpectCost float64
-	ActualCost float64
 	ReadIops   float64
 	WriteIops  float64
 }
@@ -46,6 +44,7 @@ func (item FioResult) ToCsv() string {
 }
 
 type FioResultList []FioResult
+
 func (list FioResultList) ToCsv() string {
 	var res = ""
 	header := "diskType,runtime,opType,pool,volume,blockSize,ioDepth,readIops,writeIops"
@@ -141,13 +140,13 @@ func (execConfig *ExecConfig) Run() (*FioResultList, error) {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
 				fioConfig := &FioConfig{
-					DiskType:       execConfig.DiskType,
-					Runtime:        execConfig.Runtime,
-					OpType:         opType,
-					DataPool:       execConfig.DataPool,
-					DataVolume:     execConfig.DataVolume,
-					BlockSize:      blockSize,
-					IoDepth:        ioDepth,
+					DiskType:   execConfig.DiskType,
+					Runtime:    execConfig.Runtime,
+					OpType:     opType,
+					DataPool:   execConfig.DataPool,
+					DataVolume: execConfig.DataVolume,
+					BlockSize:  blockSize,
+					IoDepth:    ioDepth,
 				}
 				bsRes, err := execConfig.RunOneJob(fioConfig)
 				if err != nil {

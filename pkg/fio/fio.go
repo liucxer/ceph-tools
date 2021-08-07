@@ -98,10 +98,6 @@ func (conf *Fio) Exec(worker interfacer.Worker) (*FioResult, error) {
 
 	// 创建配置文件
 	bsFilePath := conf.ConfigFileName()
-	_, err = worker.ExecCmd("touch " + bsFilePath)
-	if err != nil {
-		return nil, err
-	}
 	_, err = worker.ExecCmd("echo '" + conf.Config() + "' > " + bsFilePath)
 	if err != nil {
 		return nil, err
