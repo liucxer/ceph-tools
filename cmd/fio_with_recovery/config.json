@@ -1,0 +1,13 @@
+{
+  "diskType": "hdd",
+  "recoveryPool": "rb_all_disk_pool",
+  "recoveryVolume": "foo1",
+  "dataPool": "all_disk_pool",
+  "dataVolume": "foo1",
+  "runtime": 10,
+  "ipAddr": ["10.0.20.28"],
+  "osdNum": [0,1],
+  "opType": ["write"],
+  "blockSize": ["4k"],
+  "ioDepth": [1]
+}
