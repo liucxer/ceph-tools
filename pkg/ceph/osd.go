@@ -132,3 +132,65 @@ func GetSub(nodeID int64, nodeIDMap map[int64]Node) []Node {
 
 // 根据磁盘组找到 osd
 /*ceph osd crush tree -f json*/
+type JobCost struct {
+	ExpectCost float64 `json:"expect_cost"`
+	ActualCost float64 `json:"actual_cost(ms)"`
+}
+
+type JobCostList []JobCost
+
+func (list JobCostList) AvgExpectCost() float64 {
+	sum := float64(0)
+	for _, item := range list {
+		sum = sum + item.ExpectCost
+	}
+	return sum / float64(len(list))
+}
+
+func (list JobCostList) AvgActualCost() float64 {
+	sum := float64(0)
+	for _, item := range list {
+		sum = sum + item.ActualCost
+	}
+	return sum / float64(len(list))
+}
+
+func (list JobCostList) TotalExpectCost() float64 {
+	sum := float64(0)
+	for _, item := range list {
+		sum = sum + item.ExpectCost
+	}
+	return sum
+}
+
+func (list JobCostList) TotalActualCost() float64 {
+	sum := float64(0)
+	for _, item := range list {
+		sum = sum + item.ActualCost
+	}
+	return sum
+}
+
+func (list JobCostList) Coefficient() float64 {
+	return list.AvgActualCost() / list.AvgExpectCost()
+}
+
+/* ceph tell osd.0 dump_recent_ops_cost */
+func GetJobCostList(worker interfacer.Worker, osdNum int64) (JobCostList, error) {
+	var (
+		err error
+	)
+
+	bts, err := worker.ExecCmd("ceph tell osd." + strconv.Itoa(int(osdNum)) + " dump_recent_ops_cost")
+	if err != nil {
+		return nil, err
+	}
+
+	var resp JobCostList
+	err = json.Unmarshal(bts, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
+}

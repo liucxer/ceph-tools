@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/liucxer/ceph-tools/pkg/ceph"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
 	"github.com/liucxer/ceph-tools/pkg/fio"
 	"github.com/liucxer/confmiddleware/conflogger"
@@ -25,10 +27,12 @@ type FioResult struct {
 	FioConfig  *FioConfig
 	ReadIops   float64
 	WriteIops  float64
+	ExpectCost float64
+	ActualCost float64
 }
 
 func (item FioResult) ToCsv() string {
-	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f,",
+	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%0.2f,%0.2f,%0.2f,%0.2f,",
 		item.FioConfig.DiskType,
 		item.FioConfig.Runtime,
 		item.FioConfig.OpType,
@@ -38,6 +42,8 @@ func (item FioResult) ToCsv() string {
 		item.FioConfig.IoDepth,
 		item.ReadIops,
 		item.WriteIops,
+		item.ExpectCost,
+		item.ActualCost,
 	)
 
 	return itemStr
@@ -47,10 +53,10 @@ type FioResultList []FioResult
 
 func (list FioResultList) ToCsv() string {
 	var res = ""
-	header := "diskType,runtime,opType,pool,volume,blockSize,ioDepth,readIops,writeIops"
+	header := "diskType,runtime,opType,pool,volume,blockSize,ioDepth,readIops,writeIops,expectCost,actualCost"
 	res = res + header + "\n"
 	for _, item := range list {
-		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%f,%f",
+		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%0.2f,%0.2f,%0.2f,%0.2f",
 			item.FioConfig.DiskType,
 			item.FioConfig.Runtime,
 			item.FioConfig.OpType,
@@ -60,6 +66,8 @@ func (list FioResultList) ToCsv() string {
 			item.FioConfig.IoDepth,
 			item.ReadIops,
 			item.WriteIops,
+			item.ExpectCost,
+			item.ActualCost,
 		)
 		res = res + itemStr + "\n"
 	}
@@ -68,14 +76,16 @@ func (list FioResultList) ToCsv() string {
 }
 
 type ExecConfig struct {
-	DiskType   string   `json:"diskType"`
-	IpAddr     string   `json:"ipAddr"`
-	Runtime    int64    `json:"runtime"`
-	DataPool   string   `json:"dataPool"`
-	DataVolume string   `json:"dataVolume"`
-	OpType     []string `json:"opType"`
-	BlockSize  []string `json:"blockSize"`
-	IoDepth    []int64  `json:"ioDepth"`
+	WithJobCost bool     `json:"withJobCost"`
+	DiskType    string   `json:"diskType"`
+	IpAddr      string   `json:"ipAddr"`
+	Runtime     int64    `json:"runtime"`
+	DataPool    string   `json:"dataPool"`
+	DataVolume  string   `json:"dataVolume"`
+	OpType      []string `json:"opType"`
+	BlockSize   []string `json:"blockSize"`
+	IoDepth     []int64  `json:"ioDepth"`
+	OsdNum      []int64  `json:"osdNum"`
 
 	cluster *cluster_client.Cluster
 }
@@ -118,7 +128,33 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error
 		Pool:      fioConfig.DataPool,
 		RbdName:   fioConfig.DataVolume,
 	}
+
+	var totalCount = 0
+	var totalExpectCost = float64(0)
+	var totalActualCost = float64(0)
+	ctx, cancelFn := context.WithCancel(context.Background())
+
+	if execConfig.WithJobCost {
+		for _, osdNum := range execConfig.OsdNum {
+			itemOsdNum := osdNum
+			go func(ctx context.Context) {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						jobCostList, _ := ceph.GetJobCostList(execConfig.cluster.Master, itemOsdNum)
+						totalCount += len(jobCostList)
+						totalExpectCost += jobCostList.TotalExpectCost()
+						totalActualCost += jobCostList.TotalActualCost()
+					}
+				}
+			}(ctx)
+		}
+	}
+
 	fioResult, err := fioObject.Exec(execConfig.cluster.Master)
+	cancelFn()
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +162,8 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error
 	res.FioConfig = fioConfig
 	res.ReadIops = fioResult.ReadIops
 	res.WriteIops = fioResult.WriteIops
-
+	res.ExpectCost = totalExpectCost / float64(totalCount)
+	res.ActualCost = totalActualCost / float64(totalCount)
 	logrus.Infof("RunOneJob res:%s", res.ToCsv())
 	return &res, err
 }

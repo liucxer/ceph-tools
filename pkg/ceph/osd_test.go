@@ -41,3 +41,14 @@ func TestGetOsdIDsByDiskGroupName(t *testing.T) {
 	require.NoError(t, err)
 	spew.Dump(resp)
 }
+
+func TestGetJobCostList(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	hostClient, err := host_client.NewHostClient("10.0.20.28")
+	require.NoError(t, err)
+	defer hostClient.Close()
+
+	resp, err := ceph.GetJobCostList(hostClient, 9)
+	require.NoError(t, err)
+	spew.Dump(resp)
+}

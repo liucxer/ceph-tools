@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/liucxer/ceph-tools/pkg/ceph"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -339,86 +339,13 @@ func handleOneOSDFile(jobMap map[string]Job, osdFilePath string) error {
 	return nil
 }
 
-func Detect(c *cluster_client.Cluster) (float64, error) {
-	localLogDir := os.TempDir() + "cephlog/"
-	err := os.RemoveAll(localLogDir)
-	if err != nil {
-		logrus.Errorf("os.RemoveAll err. [err:%v, localLogDir:%s]", err, localLogDir)
-		return 0, err
-	}
+func Detect(c *cluster_client.Cluster) (ceph.JobCostList, error) {
+	var (
+		err error
+		res ceph.JobCostList
+	)
 
-	err = os.Mkdir(localLogDir, os.ModePerm)
-	if err != nil {
-		logrus.Errorf("os.Mkdir err. [err:%v, localLogDir:%s]", err, localLogDir)
-		return 0, err
-	}
-
-	err = c.CollectCephLog(localLogDir)
-	if err != nil {
-		return 0, err
-	}
-
-	osdFiles, err := getOSDFile(localLogDir)
-	if err != nil {
-		return 0, err
-	}
-	jobMap := map[string]Job{}
-	// 循环处理单个osd file
-	for _, osdFile := range osdFiles {
-		if strings.Contains(osdFile, ".swp") {
-			continue
-		}
-		err := handleOneOSDFile(jobMap, osdFile)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	jobList := JobList{}
-
-	for _, v := range jobMap {
-		if v.StartTime.Hour() == 0 {
-			continue
-		}
-
-		if v.EndTime.Hour() == 0 {
-			continue
-		}
-
-		if v.JobType != "osd_op" {
-			continue
-		}
-
-		v.ActualCost = float64(v.EndTime.Sub(v.StartTime).Milliseconds())
-		jobList = append(jobList, v)
-	}
-
-	if len(jobList) == 0 {
-		return 1, nil
-	}
-
-	modulus := []float64{}
-	for _, v := range jobList {
-		if v.ActualCost == 0 || v.ExpectCost == 0 {
-			continue
-		}
-		modulu := (v.ActualCost / float64(1000)) / (v.ExpectCost / float64(285))
-		modulus = append(modulus, modulu)
-	}
-	sort.Float64s(modulus)
-
-	modulusLen := len(modulus)
-	modulusNew := modulus[modulusLen/10 : modulusLen*9/10]
-
-	modulusAvg := float64(0)
-	modulusSum := float64(0)
-
-	for _, v := range modulusNew {
-		modulusSum = modulusSum + v
-	}
-	modulusAvg = modulusSum / float64(len(modulusNew))
-
-	return modulusAvg, nil
+	ceph.GetJobCostList(c.Master)
 }
 
 func SetLimit(c *cluster_client.Cluster, limit string) (float64, error) {

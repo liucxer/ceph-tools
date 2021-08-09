@@ -1,0 +1,9 @@
+{
+  "diskType": "hdd",
+  "ipAddr": "10.0.20.27",
+  "osdNum": [0,1,2,3,4,5],
+  "iops":300,
+  "maxLimit": 600,
+  "minLimit": 100,
+  "zoom": 1.5
+}

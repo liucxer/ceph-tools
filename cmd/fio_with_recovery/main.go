@@ -29,9 +29,9 @@ type FioConfig struct {
 }
 
 type FioResult struct {
-	FioConfig  *FioConfig
-	ReadIops   float64
-	WriteIops  float64
+	FioConfig *FioConfig
+	ReadIops  float64
+	WriteIops float64
 }
 
 type FioResultList []FioResult
@@ -176,9 +176,9 @@ type ExecConfig struct {
 	DataVolume     string `json:"dataVolume"`
 	RecoveryVolume string `json:"recoveryVolume"`
 
-	OpType        []string  `json:"opType"`
-	BlockSize     []string  `json:"blockSize"`
-	IoDepth       []int64   `json:"ioDepth"`
+	OpType    []string `json:"opType"`
+	BlockSize []string `json:"blockSize"`
+	IoDepth   []int64  `json:"ioDepth"`
 
 	cluster *cluster_client.Cluster
 }
@@ -242,25 +242,25 @@ func (execConfig *ExecConfig) Run() (*FioResultList, error) {
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
-					fioConfig := &FioConfig{
-						DiskType:       execConfig.DiskType,
-						Runtime:        execConfig.Runtime,
-						OpType:         opType,
-						RecoveryPool:   execConfig.RecoveryPool,
-						DataPool:       execConfig.DataPool,
-						DataVolume:     execConfig.DataVolume,
-						RecoveryVolume: execConfig.RecoveryVolume,
-						BlockSize:      blockSize,
-						IoDepth:        ioDepth,
-						OsdNum:         execConfig.OsdNum,
-					}
-					bsRes, err := execConfig.RunOneJob(fioConfig)
-					if err != nil {
-						logrus.Errorf("fioConfig Result:%+v, failure, err:%v", fioConfig, err)
-					} else {
-						logrus.Warningf("fioConfig Result:%+v, success", fioConfig)
-						fioResultList = append(fioResultList, *bsRes)
-					}
+				fioConfig := &FioConfig{
+					DiskType:       execConfig.DiskType,
+					Runtime:        execConfig.Runtime,
+					OpType:         opType,
+					RecoveryPool:   execConfig.RecoveryPool,
+					DataPool:       execConfig.DataPool,
+					DataVolume:     execConfig.DataVolume,
+					RecoveryVolume: execConfig.RecoveryVolume,
+					BlockSize:      blockSize,
+					IoDepth:        ioDepth,
+					OsdNum:         execConfig.OsdNum,
+				}
+				bsRes, err := execConfig.RunOneJob(fioConfig)
+				if err != nil {
+					logrus.Errorf("fioConfig Result:%+v, failure, err:%v", fioConfig, err)
+				} else {
+					logrus.Warningf("fioConfig Result:%+v, success", fioConfig)
+					fioResultList = append(fioResultList, *bsRes)
+				}
 			}
 		}
 	}
