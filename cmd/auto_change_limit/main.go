@@ -16,30 +16,36 @@ import (
 )
 
 type ExecConfig struct {
-	DiskType           string  `json:"diskType"`
-	IpAddr             string  `json:"ipAddr"`
-	OsdNum             []int64 `json:"osdNum"`
-	Iops               float64 `json:"iops"`
-	MaxLimit           float64 `json:"maxLimit"`
-	MinLimit           float64 `json:"minLimit"`
-	Zoom               float64 `json:"zoom"`
-	StdCoefficient string `json:"stdCoefficient"`
-	cluster            *cluster_client.Cluster
+	DiskType       string  `json:"diskType"`
+	IpAddr         string  `json:"ipAddr"`
+	OsdNum         []int64 `json:"osdNum"`
+	Iops           float64 `json:"iops"`
+	MaxLimit       float64 `json:"maxLimit"`
+	MinLimit       float64 `json:"minLimit"`
+	Zoom           float64 `json:"zoom"`
+	StdCoefficient string  `json:"stdCoefficient"`
+	cluster        *cluster_client.Cluster
 }
 
-func (execConfig *ExecConfig) ReadConfig(configFilePath string) error {
-	bts, err := ioutil.ReadFile(configFilePath)
-	if err != nil {
-		logrus.Errorf("ioutil.ReadFile err:%v", err)
-		return err
-	}
+func (execConfig *ExecConfig) RefreshExecConfig(configFilePath string) error {
+	go func() {
+		for {
+			bts, err := ioutil.ReadFile(configFilePath)
+			if err != nil {
+				logrus.Errorf("ioutil.ReadFile err:%v", err)
+				return
+			}
 
-	err = json.Unmarshal(bts, execConfig)
-	if err != nil {
-		logrus.Errorf("json.Unmarshal err:%v", err)
-		return err
-	}
-	return err
+			err = json.Unmarshal(bts, execConfig)
+			if err != nil {
+				logrus.Errorf("json.Unmarshal err:%v", err)
+				return
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+	time.Sleep(time.Second)
+	return nil
 }
 
 func (execConfig *ExecConfig) Run() error {
@@ -70,10 +76,10 @@ func (execConfig *ExecConfig) Run() error {
 	coefficient := avgActualCost / (avgExpectCost * 1000 / float64(execConfig.Iops))
 	// y = 3.8721x^-0.349
 
-	aStr := strings.Split(execConfig.StdCoefficient,"x")[0]
-	aFloat,_ := strconv.ParseFloat(aStr, 32)
-	bStr := strings.Split(execConfig.StdCoefficient,"^")[1]
-	bFloat,_ := strconv.ParseFloat(bStr, 32)
+	aStr := strings.Split(execConfig.StdCoefficient, "x")[0]
+	aFloat, _ := strconv.ParseFloat(aStr, 32)
+	bStr := strings.Split(execConfig.StdCoefficient, "^")[1]
+	bFloat, _ := strconv.ParseFloat(bStr, 32)
 	stdCoefficient := aFloat * math.Pow(avgExpectCost, bFloat)
 
 	minCoefficient := stdCoefficient
@@ -123,7 +129,8 @@ func main() {
 	}
 
 	execConfig := ExecConfig{}
-	err := execConfig.ReadConfig(os.Args[1])
+
+	err := execConfig.RefreshExecConfig(os.Args[1])
 	if err != nil {
 		return
 	}
