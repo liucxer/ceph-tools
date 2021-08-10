@@ -1,13 +1,13 @@
 {
   "diskType": "hdd",
-  "recoveryPool": "rb_all_disk_pool",
-  "recoveryVolume": "foo1",
-  "dataPool": "all_disk_pool",
-  "dataVolume": "foo1",
-  "runtime": 10,
-  "ipAddr": ["10.0.20.28"],
-  "osdNum": [0,1],
-  "opType": ["write"],
-  "blockSize": ["4k"],
-  "ioDepth": [1]
+  "recoveryPool": "hdd_rbend_pool",
+  "recoveryVolume": "image",
+  "dataPool": "hdd_end_pool",
+  "dataVolume": "image",
+  "runtime": 180,
+  "ipAddr": ["10.0.20.27"],
+  "osdNum": [0,1,2,3,4,5],
+  "opType": ["write", "read"],
+  "blockSize": ["4M"],
+  "ioDepth": [1, 16, 64]
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
+	"time"
 )
 
 type FioConfig struct {
@@ -147,6 +148,7 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error
 						totalCount += len(jobCostList)
 						totalExpectCost += jobCostList.TotalExpectCost()
 						totalActualCost += jobCostList.TotalActualCost()
+						time.Sleep(time.Second)
 					}
 				}
 			}(ctx)

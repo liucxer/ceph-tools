@@ -11,19 +11,20 @@ import (
 	"math"
 	"os"
 	"strconv"
-	"sync"
+	"strings"
 	"time"
 )
 
 type ExecConfig struct {
-	DiskType string  `json:"diskType"`
-	IpAddr   string  `json:"ipAddr"`
-	OsdNum   []int64 `json:"osdNum"`
-	Iops     float64 `json:"iops"`
-	MaxLimit float64 `json:"maxLimit"`
-	MinLimit float64 `json:"minLimit"`
-	Zoom     float64 `json:"zoom"`
-	cluster  *cluster_client.Cluster
+	DiskType           string  `json:"diskType"`
+	IpAddr             string  `json:"ipAddr"`
+	OsdNum             []int64 `json:"osdNum"`
+	Iops               float64 `json:"iops"`
+	MaxLimit           float64 `json:"maxLimit"`
+	MinLimit           float64 `json:"minLimit"`
+	Zoom               float64 `json:"zoom"`
+	StdCoefficient string `json:"stdCoefficient"`
+	cluster            *cluster_client.Cluster
 }
 
 func (execConfig *ExecConfig) ReadConfig(configFilePath string) error {
@@ -41,22 +42,39 @@ func (execConfig *ExecConfig) ReadConfig(configFilePath string) error {
 	return err
 }
 
-func (execConfig *ExecConfig) RunOneOsd(osdNum int64) error {
-	jobCostList, err := ceph.GetJobCostList(execConfig.cluster.Master, osdNum)
-	if err != nil {
-		return err
+func (execConfig *ExecConfig) Run() error {
+	var (
+		err error
+	)
+
+	var jobCostList ceph.JobCostList
+	for _, osdNum := range execConfig.OsdNum {
+		item, err := ceph.GetJobCostList(execConfig.cluster.Master, osdNum)
+		if err != nil {
+			return err
+		}
+		jobCostList = append(jobCostList, item...)
 	}
+
 	if len(jobCostList) == 0 {
-		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999"
-		_, err = execConfig.cluster.Master.ExecCmd(cmdStr)
+		for _, osdNum := range execConfig.OsdNum {
+			cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999"
+			_, err = execConfig.cluster.Master.ExecCmd(cmdStr)
+		}
 		return err
 	}
 
-	avgExpectCost := jobCostList.ExpectCost()
-	avgActualCost := jobCostList.ActualCost()
+	avgExpectCost := jobCostList.AvgExpectCost()
+	avgActualCost := jobCostList.AvgActualCost()
 
 	coefficient := avgActualCost / (avgExpectCost * 1000 / float64(execConfig.Iops))
-	stdCoefficient := 6.7829 * math.Pow(avgExpectCost, -0.509)
+	// y = 3.8721x^-0.349
+
+	aStr := strings.Split(execConfig.StdCoefficient,"x")[0]
+	aFloat,_ := strconv.ParseFloat(aStr, 32)
+	bStr := strings.Split(execConfig.StdCoefficient,"^")[1]
+	bFloat,_ := strconv.ParseFloat(bStr, 32)
+	stdCoefficient := aFloat * math.Pow(avgExpectCost, bFloat)
 
 	minCoefficient := stdCoefficient
 	maxCoefficient := stdCoefficient * execConfig.Zoom
@@ -81,26 +99,12 @@ func (execConfig *ExecConfig) RunOneOsd(osdNum int64) error {
 		"limit:%0.2f",
 		execConfig, avgExpectCost, avgActualCost, coefficient, stdCoefficient, k, limit)
 
-	cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.FormatFloat(limit, 'E', -1, 32)
-	_, err = execConfig.cluster.Master.ExecCmd(cmdStr)
-	return err
-}
-
-func (execConfig *ExecConfig) Run() error {
-	var wg sync.WaitGroup
-
+	limitStr := fmt.Sprintf("%0.2f", limit)
 	for _, osdNum := range execConfig.OsdNum {
-		wg.Add(1)
-		go func(osdNum int64) {
-			for {
-				_ = execConfig.RunOneOsd(osdNum)
-				time.Sleep(1 * time.Second)
-			}
-			wg.Done()
-		}(osdNum)
+		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + limitStr
+		_, err = execConfig.cluster.Master.ExecCmd(cmdStr)
 	}
-	wg.Wait()
-	return nil
+	return err
 }
 
 func init() {
@@ -131,5 +135,9 @@ func main() {
 	defer func() { _ = cluster.Close() }()
 
 	execConfig.cluster = cluster
-	_ = execConfig.Run()
+	for {
+		_ = execConfig.Run()
+		time.Sleep(10 * time.Second)
+	}
+
 }

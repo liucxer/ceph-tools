@@ -5,5 +5,6 @@
   "iops":300,
   "maxLimit": 600,
   "minLimit": 100,
+  "stdCoefficient": "3.8721x^-0.349",
   "zoom": 1.5
 }
