@@ -1,12 +1,17 @@
 {
+  "withRecovery": true,
+  "recoveryPool": "hdd_rbend_pool",
+  "recoveryVolume": "image",
+
   "withJobCost": true,
+  "osdNum": [0,1,2,3,4,5],
+
   "diskType": "hdd",
   "dataPool": "hdd_end_pool",
   "dataVolume": "image",
   "runtime": 180,
   "ipAddr": "10.0.20.27",
-  "opType": ["randwrite"],
+  "opType": ["randwrite","randread"],
   "blockSize": ["4k", "64k", "256k", "1M", "2M", "4M"],
-  "ioDepth": [1],
-  "osdNum": [0,1,2,3,4,5]
+  "ioDepth": [1]
 }

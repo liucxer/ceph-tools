@@ -2,7 +2,6 @@
   "diskType": "hdd",
   "ipAddr": "10.0.20.27",
   "osdNum": [0,1,2,3,4,5],
-  "iops":300,
   "maxLimit": 500,
   "minLimit": 100,
   "stdCoefficient": "3.8721x^-0.349",

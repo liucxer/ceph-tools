@@ -16,15 +16,16 @@ import (
 )
 
 type ExecConfig struct {
-	DiskType       string  `json:"diskType"`
-	IpAddr         string  `json:"ipAddr"`
-	OsdNum         []int64 `json:"osdNum"`
-	Iops           float64 `json:"iops"`
-	MaxLimit       float64 `json:"maxLimit"`
-	MinLimit       float64 `json:"minLimit"`
-	Zoom           float64 `json:"zoom"`
-	StdCoefficient string  `json:"stdCoefficient"`
-	cluster        *cluster_client.Cluster
+	MapOsd4KRandWriteIops map[int64]float64 `json:"mapOsd4KRandWriteIops"`
+	AvgOsd4KRandWriteIops float64           `json:"avgOsd4KRandWriteIops"`
+	DiskType              string            `json:"diskType"`
+	IpAddr                string            `json:"ipAddr"`
+	OsdNum                []int64           `json:"osdNum"`
+	MaxLimit              float64           `json:"maxLimit"`
+	MinLimit              float64           `json:"minLimit"`
+	Zoom                  float64           `json:"zoom"`
+	StdCoefficient        string            `json:"stdCoefficient"`
+	cluster               *cluster_client.Cluster
 }
 
 func (execConfig *ExecConfig) RefreshExecConfig(configFilePath string) error {
@@ -73,7 +74,7 @@ func (execConfig *ExecConfig) Run() error {
 	avgExpectCost := jobCostList.AvgExpectCost()
 	avgActualCost := jobCostList.AvgActualCost()
 
-	coefficient := avgActualCost / (avgExpectCost * 1000 / float64(execConfig.Iops))
+	coefficient := avgActualCost / (avgExpectCost * 1000 / float64(execConfig.AvgOsd4KRandWriteIops))
 	// y = 3.8721x^-0.349
 
 	aStr := strings.Split(execConfig.StdCoefficient, "x")[0]
@@ -122,6 +123,22 @@ func init() {
 	logger.Init()
 }
 
+func (execConfig *ExecConfig) Init4KRandWriteIops() error {
+	execConfig.MapOsd4KRandWriteIops = map[int64]float64{}
+	sumIops := float64(0)
+	for _, osdNum := range execConfig.OsdNum {
+		iops, err := ceph.Get4KRandWriteIops(execConfig.cluster.Master, osdNum)
+		if err != nil {
+			return err
+		}
+		execConfig.MapOsd4KRandWriteIops[osdNum] = iops
+		sumIops += iops
+	}
+
+	execConfig.AvgOsd4KRandWriteIops = sumIops / float64(len(execConfig.OsdNum))
+	return nil
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Println("Usage:\n     ./cmd config.json")
@@ -135,6 +152,11 @@ func main() {
 		return
 	}
 
+	err = execConfig.Init4KRandWriteIops()
+	if err != nil {
+		return
+	}
+
 	cluster, err := cluster_client.NewCluster([]string{execConfig.IpAddr})
 	if err != nil {
 		return
@@ -142,9 +164,10 @@ func main() {
 	defer func() { _ = cluster.Close() }()
 
 	execConfig.cluster = cluster
+
 	for {
 		_ = execConfig.Run()
-		time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 }

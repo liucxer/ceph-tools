@@ -6,89 +6,53 @@ import (
 	"fmt"
 	"github.com/liucxer/ceph-tools/pkg/ceph"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
+	"github.com/liucxer/ceph-tools/pkg/csv"
 	"github.com/liucxer/ceph-tools/pkg/fio"
 	"github.com/liucxer/confmiddleware/conflogger"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"time"
 )
 
 type FioConfig struct {
-	DiskType   string `json:"diskType"`
-	Runtime    int64  `json:"runtime"`
-	OpType     string `json:"opType"`
-	DataPool   string `json:"dataPool"`
-	DataVolume string `json:"dataVolume"`
-	BlockSize  string `json:"blockSize"`
-	IoDepth    int64  `json:"ioDepth"`
+	WithJobCost bool   `json:"withJobCost"`
+	DiskType    string `json:"diskType"`
+	Runtime     int64  `json:"runtime"`
+	OpType      string `json:"opType"`
+	DataPool    string `json:"dataPool"`
+	DataVolume  string `json:"dataVolume"`
+	BlockSize   string `json:"blockSize"`
+	IoDepth     int64  `json:"ioDepth"`
 }
 
 type FioResult struct {
-	FioConfig  *FioConfig
-	ReadIops   float64
-	WriteIops  float64
-	ExpectCost float64
-	ActualCost float64
-}
-
-func (item FioResult) ToCsv() string {
-	itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%0.2f,%0.2f,%0.2f,%0.2f,",
-		item.FioConfig.DiskType,
-		item.FioConfig.Runtime,
-		item.FioConfig.OpType,
-		item.FioConfig.DataPool,
-		item.FioConfig.DataVolume,
-		item.FioConfig.BlockSize,
-		item.FioConfig.IoDepth,
-		item.ReadIops,
-		item.WriteIops,
-		item.ExpectCost,
-		item.ActualCost,
-	)
-
-	return itemStr
-}
-
-type FioResultList []FioResult
-
-func (list FioResultList) ToCsv() string {
-	var res = ""
-	header := "diskType,runtime,opType,pool,volume,blockSize,ioDepth,readIops,writeIops,expectCost,actualCost"
-	res = res + header + "\n"
-	for _, item := range list {
-		itemStr := fmt.Sprintf("%s,%d,%s,%s,%s,%s,%d,%0.2f,%0.2f,%0.2f,%0.2f",
-			item.FioConfig.DiskType,
-			item.FioConfig.Runtime,
-			item.FioConfig.OpType,
-			item.FioConfig.DataPool,
-			item.FioConfig.DataVolume,
-			item.FioConfig.BlockSize,
-			item.FioConfig.IoDepth,
-			item.ReadIops,
-			item.WriteIops,
-			item.ExpectCost,
-			item.ActualCost,
-		)
-		res = res + itemStr + "\n"
-	}
-
-	return res
+	FioConfig
+	fio.FioResult
+	ExpectCost float64 `json:"expectCost"`
+	ActualCost float64 `json:"actualCost"`
 }
 
 type ExecConfig struct {
-	WithJobCost bool     `json:"withJobCost"`
-	DiskType    string   `json:"diskType"`
-	IpAddr      string   `json:"ipAddr"`
-	Runtime     int64    `json:"runtime"`
-	DataPool    string   `json:"dataPool"`
-	DataVolume  string   `json:"dataVolume"`
-	OpType      []string `json:"opType"`
-	BlockSize   []string `json:"blockSize"`
-	IoDepth     []int64  `json:"ioDepth"`
-	OsdNum      []int64  `json:"osdNum"`
+	*cluster_client.Cluster
+	*ceph.CephConf
+	
+	WithRecovery   bool   `json:"withRecovery"`
+	RecoveryPool   string `json:"recoveryPool"`
+	RecoveryVolume string `json:"recoveryVolume"`
 
-	cluster *cluster_client.Cluster
+	WithJobCost bool    `json:"withJobCost"`
+	OsdNum      []int64 `json:"osdNum"`
+
+	DiskType   string   `json:"diskType"`
+	IpAddr     string   `json:"ipAddr"`
+	Runtime    int64    `json:"runtime"`
+	DataPool   string   `json:"dataPool"`
+	DataVolume string   `json:"dataVolume"`
+	OpType     []string `json:"opType"`
+	BlockSize  []string `json:"blockSize"`
+	IoDepth    []int64  `json:"ioDepth"`
 }
 
 func (execConfig *ExecConfig) ReadConfig(configFilePath string) error {
@@ -135,6 +99,22 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error
 	var totalActualCost = float64(0)
 	ctx, cancelFn := context.WithCancel(context.Background())
 
+	if execConfig.WithRecovery {
+		// 等待对应的osd clean
+		err = execConfig.WaitOsdClean()
+		if err != nil {
+			cancelFn()
+			return &res, err
+		}
+
+		time.Sleep(10 * time.Second)
+		_, err = execConfig.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 2")
+		if err != nil {
+			cancelFn()
+			return &res, err
+		}
+	}
+
 	if execConfig.WithJobCost {
 		for _, osdNum := range execConfig.OsdNum {
 			itemOsdNum := osdNum
@@ -144,48 +124,120 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error
 					case <-ctx.Done():
 						return
 					default:
-						jobCostList, _ := ceph.GetJobCostList(execConfig.cluster.Master, itemOsdNum)
+						jobCostList, _ := ceph.GetJobCostList(execConfig.Master, itemOsdNum)
 						totalCount += len(jobCostList)
 						totalExpectCost += jobCostList.TotalExpectCost()
 						totalActualCost += jobCostList.TotalActualCost()
-						time.Sleep(time.Second)
+						time.Sleep(10 * time.Second)
 					}
 				}
 			}(ctx)
 		}
 	}
 
-	fioResult, err := fioObject.Exec(execConfig.cluster.Master)
+	fioResult, err := fioObject.Exec(execConfig.Master)
 	cancelFn()
 	if err != nil {
 		return nil, err
 	}
 
-	res.FioConfig = fioConfig
-	res.ReadIops = fioResult.ReadIops
-	res.WriteIops = fioResult.WriteIops
+	res.FioResult = *fioResult
+	res.FioConfig = *fioConfig
 	res.ExpectCost = totalExpectCost / float64(totalCount)
 	res.ActualCost = totalActualCost / float64(totalCount)
-	logrus.Infof("RunOneJob res:%s", res.ToCsv())
+
+	name, value, err := csv.ObjectToCsv(res)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Infof("RunOneJob res:%+v", res)
+	logrus.Infof("RunOneJob name:%s", name)
+	logrus.Infof("RunOneJob value:%s", value)
 	return &res, err
 }
 
-func (execConfig *ExecConfig) Run() (*FioResultList, error) {
+func (execConfig *ExecConfig) WaitOsdClean() error {
+	var (
+		err error
+	)
+	for _, osdNum := range execConfig.OsdNum {
+		_, err = execConfig.OsdNumMap[osdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+		if err != nil {
+			return err
+		}
+	}
+
+	// 设置limit 最大, 这样recovery恢复最快
+	for _, osdNum := range execConfig.OsdNum {
+		_, err = execConfig.OsdNumMap[osdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = execConfig.Master.ExecCmd("ceph osd pool set " + execConfig.RecoveryPool + " size 1")
+	if err != nil {
+		return err
+	}
+
+	count := 0
+	for {
+		time.Sleep(5 * time.Second)
+
+		// 等待OSDClean
+		for _, osdNum := range execConfig.OsdNum {
+			osdStatus, err := execConfig.OsdStatus(osdNum)
+			if err != nil {
+				return err
+			}
+			if !osdStatus.ActiveClean {
+				count = 0
+				continue
+			}
+		}
+
+		// 等待数据删除
+		for _, osdNum := range execConfig.OsdNum {
+			osdPerf, err := execConfig.OsdNumMap[osdNum].OSDPerf("osd." + strconv.Itoa(int(osdNum)))
+			if err != nil {
+				return err
+			}
+
+			if osdPerf.OSD.NumpgRemoving != 0 {
+				count = 0
+				continue
+			}
+			if osdPerf.OSD.NumpgStray != 0 {
+				count = 0
+				continue
+			}
+		}
+		count++
+		if count > 3 {
+			break
+		}
+	}
+
+	return nil
+}
+
+func (execConfig *ExecConfig) Run() (*[]FioResult, error) {
 	var (
 		err           error
-		fioResultList FioResultList
+		fioResultList []FioResult
 	)
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
 				fioConfig := &FioConfig{
-					DiskType:   execConfig.DiskType,
-					Runtime:    execConfig.Runtime,
-					OpType:     opType,
-					DataPool:   execConfig.DataPool,
-					DataVolume: execConfig.DataVolume,
-					BlockSize:  blockSize,
-					IoDepth:    ioDepth,
+					WithJobCost: execConfig.WithJobCost,
+					DiskType:    execConfig.DiskType,
+					Runtime:     execConfig.Runtime,
+					OpType:      opType,
+					DataPool:    execConfig.DataPool,
+					DataVolume:  execConfig.DataVolume,
+					BlockSize:   blockSize,
+					IoDepth:     ioDepth,
 				}
 				bsRes, err := execConfig.RunOneJob(fioConfig)
 				if err != nil {
@@ -200,31 +252,47 @@ func (execConfig *ExecConfig) Run() (*FioResultList, error) {
 	return &fioResultList, err
 }
 
+
+func NewExecConfig(configPath string) (*ExecConfig, error) {
+	execConfig := ExecConfig{}
+	err := execConfig.ReadConfig(configPath)
+	if err != nil {
+		return &execConfig, nil
+	}
+
+	execConfig.Cluster, err = cluster_client.NewCluster([]string{execConfig.IpAddr})
+	if err != nil {
+		return &execConfig, nil
+	}
+	defer func() { _ = execConfig.Cluster.Close() }()
+
+	execConfig.CephConf, err = ceph.NewCephConf(execConfig.Master, execConfig.OsdNum)
+	if err != nil {
+		return &execConfig, nil
+	}
+	return &execConfig, nil
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Println("Usage:\n     ./cmd config.json")
 		return
 	}
 
-	execConfig := ExecConfig{}
-	err := execConfig.ReadConfig(os.Args[1])
+	execConfig, err := NewExecConfig(os.Args[1])
 	if err != nil {
 		return
 	}
 
-	cluster, err := cluster_client.NewCluster([]string{execConfig.IpAddr})
-	if err != nil {
-		return
-	}
-	defer func() { _ = cluster.Close() }()
-
-	execConfig.cluster = cluster
 	fioResultList, err := execConfig.Run()
 	if err != nil {
 		return
 	}
 
-	csv := fioResultList.ToCsv()
+	res, err := csv.ObjectListToCsv(fioResultList)
+	if err != nil {
+		return
+	}
 
-	fmt.Println(csv)
+	fmt.Println(res)
 }

@@ -194,3 +194,38 @@ func GetJobCostList(worker interfacer.Worker, osdNum int64) (JobCostList, error)
 
 	return resp, nil
 }
+
+func Get4KRandWriteIops(worker interfacer.Worker, osdNum int64) (float64, error) {
+	var (
+		err error
+	)
+
+	type Resp struct {
+		BytesWritten int64   `json:"bytes_written"`
+		BlockSize    int64   `json:"blocksize"`
+		ElapsedSec   float64 `json:"elapsed_sec"`
+		BytesPerSec  float64 `json:"bytes_per_sec"`
+		Iops         float64 `json:"iops"`
+		Latency      float64 `json:"latency(ms)"`
+	}
+
+	cmdStr := "ceph tell osd." + strconv.Itoa(int(osdNum)) + " cache drop"
+	bts, err := worker.ExecCmd(cmdStr)
+	if err != nil {
+		return 0, err
+	}
+
+	cmdStr = "ceph tell osd." + strconv.Itoa(int(osdNum)) + " bench 12288000 4096 4194304 100"
+	bts, err = worker.ExecCmd(cmdStr)
+	if err != nil {
+		return 0, err
+	}
+
+	var resp Resp
+	err = json.Unmarshal(bts, &resp)
+	if err != nil {
+		return 0, err
+	}
+
+	return resp.Iops, nil
+}
