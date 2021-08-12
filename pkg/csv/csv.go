@@ -21,16 +21,17 @@ func ObjectToCsv(objectArgs interface{}) (string, string, error) {
 	objectTypeList := objectRef.Type()
 	for i := 0; i < objectRef.NumField(); i++ {
 		objectField := objectRef.Field(i)
+		name := objectTypeList.Field(i).Name
 		if objectField.Kind() == reflect.Struct {
 			subObject := objectField
 			subObjectType := subObject.Type()
 			for j := 0; j < subObject.NumField(); j++ {
 				subObjectField := subObject.Field(j)
-				nameStr += subObjectType.Field(j).Name + ","
+				nameStr += name + "." + subObjectType.Field(j).Name + ","
 				valueStr += fmt.Sprintf("%v", subObjectField.Interface()) + ","
 			}
 		} else {
-			nameStr += objectTypeList.Field(i).Name + ","
+			nameStr += name + ","
 			valueStr += fmt.Sprintf("%v", objectField.Interface()) + ","
 		}
 	}
@@ -51,16 +52,17 @@ func ObjectListToCsv(object interface{}) (string, error) {
 		objectTypeList := item.Type()
 		for i := 0; i < item.NumField(); i++ {
 			objectField := item.Field(i)
+			name := objectTypeList.Field(i).Name
 			if objectField.Kind() == reflect.Struct {
 				subObject := objectField
 				subObjectType := subObject.Type()
 				for j := 0; j < subObject.NumField(); j++ {
 					subObjectField := subObject.Field(j)
-					nameStr += subObjectType.Field(j).Name + ","
+					nameStr += name + "." + subObjectType.Field(j).Name + ","
 					valueStr += fmt.Sprintf("%v", subObjectField.Interface()) + ","
 				}
 			} else {
-				nameStr += objectTypeList.Field(i).Name + ","
+				nameStr += name + ","
 				valueStr += fmt.Sprintf("%v", objectField.Interface()) + ","
 			}
 		}

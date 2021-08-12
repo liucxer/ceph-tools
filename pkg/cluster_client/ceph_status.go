@@ -2,7 +2,9 @@ package cluster_client
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
+	"time"
 )
 
 type CephStatus struct {
@@ -15,7 +17,17 @@ type CephStatus struct {
 
 type CephStatusList []CephStatus
 
-func (l CephStatusList) ReadBytesSec() float64 {
+func (l CephStatusList) AvgCephStatus() CephStatus {
+	var res CephStatus
+	res.ReadBytesSec, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", l.AvgReadBytesSec()), 64)
+	res.ReadOpPerSec, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", l.AvgReadOpPerSec()), 64)
+	res.RecoveringBytesPerSec, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", l.AvgRecoveringBytesPerSec()), 64)
+	res.WriteBytesSec, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", l.AvgWriteBytesSec()), 64)
+	res.WriteOpPerSec, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", l.AvgWriteOpPerSec()), 64)
+	return res
+}
+
+func (l CephStatusList) AvgReadBytesSec() float64 {
 	res := float64(0)
 	for _, v := range l {
 		res = res + v.ReadBytesSec
@@ -23,7 +35,7 @@ func (l CephStatusList) ReadBytesSec() float64 {
 	return res / float64(len(l))
 }
 
-func (l CephStatusList) ReadOpPerSec() float64 {
+func (l CephStatusList) AvgReadOpPerSec() float64 {
 	res := float64(0)
 	for _, v := range l {
 		res = res + v.ReadOpPerSec
@@ -31,7 +43,7 @@ func (l CephStatusList) ReadOpPerSec() float64 {
 	return res / float64(len(l))
 }
 
-func (l CephStatusList) RecoveringBytesPerSec() float64 {
+func (l CephStatusList) AvgRecoveringBytesPerSec() float64 {
 	res := float64(0)
 	for _, v := range l {
 		res = res + v.RecoveringBytesPerSec
@@ -39,7 +51,7 @@ func (l CephStatusList) RecoveringBytesPerSec() float64 {
 	return res / float64(len(l))
 }
 
-func (l CephStatusList) WriteBytesSec() float64 {
+func (l CephStatusList) AvgWriteBytesSec() float64 {
 	res := float64(0)
 	for _, v := range l {
 		res = res + v.WriteBytesSec
@@ -47,7 +59,7 @@ func (l CephStatusList) WriteBytesSec() float64 {
 	return res / float64(len(l))
 }
 
-func (l CephStatusList) WriteOpPerSec() float64 {
+func (l CephStatusList) AvgWriteOpPerSec() float64 {
 	res := float64(0)
 	for _, v := range l {
 		res = res + v.WriteOpPerSec
@@ -154,7 +166,7 @@ func (cluster *Cluster) CephStatus(second int) (*CephStatusList, error) {
 	var list CephStatusList
 	for i := 0; i < second; i++ {
 		var res CephStatus
-		resp, err := cluster.Clients[0].ExecCmd("ceph status -f json")
+		resp, err := cluster.Master.ExecCmd("ceph status -f json")
 		if err != nil {
 			return nil, err
 		}
@@ -167,6 +179,7 @@ func (cluster *Cluster) CephStatus(second int) (*CephStatusList, error) {
 
 		res = cephStatusResp.PGMap
 		list = append(list, res)
+		time.Sleep(time.Second)
 	}
 
 	return &list, nil

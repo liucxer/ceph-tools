@@ -33,10 +33,12 @@ type FioConfig struct {
 }
 
 type ExecResult struct {
+	cluster_client.CephStatus
 	FioConfig
 	fio.FioResult
-	ExpectCost float64 `json:"expectCost"`
-	ActualCost float64 `json:"actualCost"`
+	ExpectCost    float64 `json:"expectCost"`
+	ActualCost    float64 `json:"actualCost"`
+	BaseLineActualCost float64 `json:"baseLineActualCost"`
 }
 
 type ExecConfig struct {
@@ -49,6 +51,8 @@ type ExecConfig struct {
 
 	WithJobCost bool    `json:"withJobCost"`
 	OsdNum      []int64 `json:"osdNum"`
+
+	WithCephStatus bool `json:"withCephStatus"`
 
 	DiskType   string `json:"diskType"`
 	IpAddr     string `json:"ipAddr"`
@@ -100,9 +104,6 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 		RbdName:   fioConfig.DataVolume,
 	}
 
-	var totalCount = 0
-	var totalExpectCost = float64(0)
-	var totalActualCost = float64(0)
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	if execConfig.WithRecovery {
@@ -121,6 +122,7 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 		}
 	}
 
+	var jobCostList ceph.JobCostList
 	if execConfig.WithJobCost {
 		for _, osdNum := range execConfig.OsdNum {
 			itemOsdNum := osdNum
@@ -130,15 +132,29 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 					case <-ctx.Done():
 						return
 					default:
-						jobCostList, _ := ceph.GetJobCostList(execConfig.Master, itemOsdNum)
-						totalCount += len(jobCostList)
-						totalExpectCost += jobCostList.TotalExpectCost()
-						totalActualCost += jobCostList.TotalActualCost()
+						itemJobCostList, _ := ceph.GetJobCostList(execConfig.Master, itemOsdNum)
+						jobCostList = append(jobCostList, itemJobCostList...)
 						time.Sleep(10 * time.Second)
 					}
 				}
 			}(ctx)
 		}
+	}
+
+	var cephStatusList cluster_client.CephStatusList
+	if execConfig.WithCephStatus {
+		go func(ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					cephStatus, _ := execConfig.CurrentCephStatus()
+					cephStatusList = append(cephStatusList, *cephStatus)
+					time.Sleep(1 * time.Second)
+				}
+			}
+		}(ctx)
 	}
 
 	fioResult, err := fioObject.Exec(execConfig.Master)
@@ -149,8 +165,10 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 
 	res.FioResult = *fioResult
 	res.FioConfig = *fioConfig
-	res.ExpectCost, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", totalExpectCost/float64(totalCount)), 64)
-	res.ActualCost, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", totalActualCost/float64(totalCount)), 64)
+	res.CephStatus = cephStatusList.AvgCephStatus()
+	res.ExpectCost = jobCostList.AvgExpectCost()
+	res.ActualCost = jobCostList.AvgActualCost()
+	res.BaseLineActualCost = jobCostList.BaseLineActualCost()
 
 	name, value, err := csv.ObjectToCsv(res)
 	if err != nil {
@@ -224,6 +242,13 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 		}
 	}
 
+	// 设置limit 最大, 这样recovery恢复最快
+	for _, osdNum := range execConfig.OsdNum {
+		_, err = execConfig.OsdNumMap[osdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 100")
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -235,6 +260,9 @@ func (execConfig *ExecConfig) Run() (*[]ExecResult, error) {
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
+				for _, osdNum := range execConfig.OsdNum {
+					_, _ = execConfig.OsdNumMap[osdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+				}
 				fioConfig := &FioConfig{
 					WithRecovery:   execConfig.WithRecovery,
 					RecoveryPool:   execConfig.RecoveryPool,

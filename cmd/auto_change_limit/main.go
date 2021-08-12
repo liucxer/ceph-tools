@@ -11,22 +11,18 @@ import (
 	"math"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
 type ExecConfig struct {
-	MapOsd4KRandWriteIops map[int64]float64 `json:"mapOsd4KRandWriteIops"`
-	AvgOsd4KRandWriteIops float64           `json:"avgOsd4KRandWriteIops"`
-	DiskType              string            `json:"diskType"`
-	IpAddr                string            `json:"ipAddr"`
-	OsdNum                []int64           `json:"osdNum"`
-	MaxLimit              float64           `json:"maxLimit"`
-	MinLimit              float64           `json:"minLimit"`
-	Zoom                  float64           `json:"zoom"`
-	WriteStdCoefficient   string            `json:"writeStdCoefficient"`
-	ReadStdCoefficient    string            `json:"readStdCoefficient"`
-	cluster               *cluster_client.Cluster
+	DiskType string  `json:"diskType"`
+	IpAddr   string  `json:"ipAddr"`
+	OsdNum   []int64 `json:"osdNum"`
+	MaxLimit float64 `json:"maxLimit"`
+	MinLimit float64 `json:"minLimit"`
+	Zoom     float64 `json:"zoom"`
+	*ceph.CephConf
+	cluster *cluster_client.Cluster
 }
 
 func (execConfig *ExecConfig) RefreshExecConfig(configFilePath string) error {
@@ -75,21 +71,11 @@ func (execConfig *ExecConfig) Run() error {
 	var coefficients []float64
 	for _, jobCost := range jobCostList {
 		if jobCost.Type == "write" {
-			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
-			aFloat, _ := strconv.ParseFloat(aStr, 32)
-
-			bStr := strings.Split(execConfig.WriteStdCoefficient, "x")[1]
-			bFloat, _ := strconv.ParseFloat(bStr, 32)
-			expectCost := aFloat*jobCost.ExpectCost + bFloat
+			expectCost := execConfig.WriteLineMetaData.A*jobCost.ExpectCost + execConfig.WriteLineMetaData.B
 			coefficient := jobCost.ActualCost / expectCost
 			coefficients = append(coefficients, coefficient)
 		} else {
-			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
-			aFloat, _ := strconv.ParseFloat(aStr, 32)
-
-			bStr := strings.Split(execConfig.WriteStdCoefficient, "x")[1]
-			bFloat, _ := strconv.ParseFloat(bStr, 32)
-			expectCost := aFloat*jobCost.ExpectCost + bFloat
+			expectCost := execConfig.ReadLineMetaData.A*jobCost.ExpectCost + execConfig.ReadLineMetaData.B
 			coefficient := jobCost.ActualCost / expectCost
 			coefficients = append(coefficients, coefficient)
 		}
@@ -138,22 +124,6 @@ func init() {
 	logger.Init()
 }
 
-func (execConfig *ExecConfig) Init4KRandWriteIops() error {
-	execConfig.MapOsd4KRandWriteIops = map[int64]float64{}
-	sumIops := float64(0)
-	for _, osdNum := range execConfig.OsdNum {
-		iops, err := ceph.Get4KRandWriteIops(execConfig.cluster.Master, osdNum)
-		if err != nil {
-			return err
-		}
-		execConfig.MapOsd4KRandWriteIops[osdNum] = iops
-		sumIops += iops
-	}
-
-	execConfig.AvgOsd4KRandWriteIops = sumIops / float64(len(execConfig.OsdNum))
-	return nil
-}
-
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Println("Usage:\n     ./cmd config.json")
@@ -174,6 +144,11 @@ func main() {
 	defer func() { _ = cluster.Close() }()
 
 	execConfig.cluster = cluster
+
+	execConfig.CephConf, err = ceph.NewCephConf(execConfig.cluster.Master, execConfig.OsdNum)
+	if err != nil {
+		return
+	}
 
 	for {
 		_ = execConfig.Run()

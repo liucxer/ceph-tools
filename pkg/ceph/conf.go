@@ -3,13 +3,20 @@ package ceph
 import (
 	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/liucxer/ceph-tools/pkg/interfacer"
+	"github.com/liucxer/ceph-tools/pkg/line"
 	"github.com/sirupsen/logrus"
 )
 
 type CephConf struct {
-	Ips        []string                          `json:"ips"`
-	HostClient []host_client.HostClient          `json:"hostClient"`
-	OsdNumMap  map[int64]*host_client.HostClient `json:"osdNumMap"`
+	interfacer.Worker
+	Ips                     []string                          `json:"ips"`
+	HostClient              []host_client.HostClient          `json:"hostClient"`
+	OsdNum                  []int64                           `json:"osdNum"`
+	OsdNumMap               map[int64]*host_client.HostClient `json:"osdNumMap"`
+	OsdNumReadLineMetaData  map[int64]line.LineMetaData       `json:"osdNumReadLineMetaData"`
+	OsdNumWriteLineMetaData map[int64]line.LineMetaData       `json:"osdNumWriteLineMetaData"`
+	ReadLineMetaData        line.LineMetaData                 `json:"readLineMetaData"`
+	WriteLineMetaData       line.LineMetaData                 `json:"writeLineMetaData"`
 }
 
 func NewCephConf(worker interfacer.Worker, osdNums []int64) (*CephConf, error) {
@@ -18,6 +25,8 @@ func NewCephConf(worker interfacer.Worker, osdNums []int64) (*CephConf, error) {
 		err  error
 	)
 
+	conf.Worker = worker
+	conf.OsdNum = osdNums
 	conf.OsdNumMap = map[int64]*host_client.HostClient{}
 	for _, osdNum := range osdNums {
 		ip, err := GetOSDIp(worker, osdNum)

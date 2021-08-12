@@ -1,11 +1,14 @@
 package ceph
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/liucxer/ceph-tools/pkg/interfacer"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func GetOSDIp(worker interfacer.Worker, osdID int64) (string, error) {
@@ -140,20 +143,51 @@ type JobCost struct {
 
 type JobCostList []JobCost
 
+func (list JobCostList) BaseLineActualCost() float64 {
+	if len(list) == 0 {
+		return 0
+	}
+
+	actualCost :=[]float64{}
+	for _, item := range list {
+		if item.ActualCost < 1 {
+			continue
+		}
+		actualCost = append(actualCost, item.ActualCost)
+	}
+	if len(actualCost) > 10 {
+		return actualCost[len(actualCost)/10]
+	} else {
+		return actualCost[0]
+	}
+
+
+}
+
 func (list JobCostList) AvgExpectCost() float64 {
+	if len(list) == 0 {
+		return 0
+	}
 	sum := float64(0)
 	for _, item := range list {
 		sum = sum + item.ExpectCost
 	}
-	return sum / float64(len(list))
+
+	res, _ := strconv.ParseFloat(fmt.Sprintf("%.2f", sum/float64(len(list))), 64)
+	return res
 }
 
 func (list JobCostList) AvgActualCost() float64 {
+	if len(list) == 0 {
+		return 0
+	}
+
 	sum := float64(0)
 	for _, item := range list {
 		sum = sum + item.ActualCost
 	}
-	return sum / float64(len(list))
+	res, _ := strconv.ParseFloat(fmt.Sprintf("%.2f", sum/float64(len(list))), 64)
+	return res
 }
 
 func (list JobCostList) TotalExpectCost() float64 {
@@ -194,6 +228,30 @@ func GetJobCostList(worker interfacer.Worker, osdNum int64) (JobCostList, error)
 	}
 
 	return resp, nil
+}
+
+func AsyncJobCostListFunc(ctx context.Context, worker interfacer.Worker, osdNum []int64) (JobCostList, error) {
+	var (
+		err error
+		res JobCostList
+	)
+	for _, osdNum := range osdNum {
+		itemOsdNum := osdNum
+		go func(ctx context.Context) {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					item, _ := GetJobCostList(worker, itemOsdNum)
+					res = append(res, item...)
+					time.Sleep(10 * time.Second)
+				}
+			}
+		}(ctx)
+	}
+
+	return res, err
 }
 
 func Get4KRandWriteIops(worker interfacer.Worker, osdNum int64) (float64, error) {
