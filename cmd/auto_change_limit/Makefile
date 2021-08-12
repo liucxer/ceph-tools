@@ -1,13 +1,13 @@
-all: auto_change_limit-mac auto_change_limit-linux auto_change_limit-windows
+all: auto_change_limit_mac auto_change_limit_linux auto_change_limit_windows
 
-auto_change_limit-mac: main.go
+auto_change_limit_mac: main.go
 	mkdir -p build
-	go build -o ./build/auto_change_limit-mac main.go
+	go build -o ./build/auto_change_limit_mac main.go
 
-auto_change_limit-linux: main.go
+auto_change_limit_linux: main.go
 	mkdir -p build && cd build
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./build/auto_change_limit-linux main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./build/auto_change_limit_linux main.go
 
-auto_change_limit-windows: main.go
+auto_change_limit_windows: main.go
 	mkdir -p build && cd build
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ./build/auto_change_limit-windows main.go
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ./build/auto_change_limit_windows main.go

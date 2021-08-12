@@ -131,10 +131,11 @@ func GetSub(nodeID int64, nodeIDMap map[int64]Node) []Node {
 }
 
 // 根据磁盘组找到 osd
-/*ceph osd crush tree -f json*/
 type JobCost struct {
 	ExpectCost float64 `json:"expect_cost"`
 	ActualCost float64 `json:"actual_cost(ms)"`
+	Type       string  `json:"type"`
+	Bytes      int64   `json:"bytes"`
 }
 
 type JobCostList []JobCost

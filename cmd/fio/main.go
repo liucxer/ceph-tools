@@ -17,17 +17,22 @@ import (
 )
 
 type FioConfig struct {
-	WithJobCost bool   `json:"withJobCost"`
-	DiskType    string `json:"diskType"`
-	Runtime     int64  `json:"runtime"`
-	OpType      string `json:"opType"`
-	DataPool    string `json:"dataPool"`
-	DataVolume  string `json:"dataVolume"`
-	BlockSize   string `json:"blockSize"`
-	IoDepth     int64  `json:"ioDepth"`
+	WithRecovery   bool   `json:"withRecovery"`
+	RecoveryPool   string `json:"recoveryPool"`
+	RecoveryVolume string `json:"recoveryVolume"`
+
+	WithJobCost bool `json:"withJobCost"`
+
+	DiskType   string `json:"diskType"`
+	Runtime    int64  `json:"runtime"`
+	DataPool   string `json:"dataPool"`
+	DataVolume string `json:"dataVolume"`
+	OpType     string `json:"opType"`
+	BlockSize  string `json:"blockSize"`
+	IoDepth    int64  `json:"ioDepth"`
 }
 
-type FioResult struct {
+type ExecResult struct {
 	FioConfig
 	fio.FioResult
 	ExpectCost float64 `json:"expectCost"`
@@ -37,7 +42,7 @@ type FioResult struct {
 type ExecConfig struct {
 	*cluster_client.Cluster
 	*ceph.CephConf
-	
+
 	WithRecovery   bool   `json:"withRecovery"`
 	RecoveryPool   string `json:"recoveryPool"`
 	RecoveryVolume string `json:"recoveryVolume"`
@@ -45,14 +50,15 @@ type ExecConfig struct {
 	WithJobCost bool    `json:"withJobCost"`
 	OsdNum      []int64 `json:"osdNum"`
 
-	DiskType   string   `json:"diskType"`
-	IpAddr     string   `json:"ipAddr"`
-	Runtime    int64    `json:"runtime"`
-	DataPool   string   `json:"dataPool"`
-	DataVolume string   `json:"dataVolume"`
-	OpType     []string `json:"opType"`
-	BlockSize  []string `json:"blockSize"`
-	IoDepth    []int64  `json:"ioDepth"`
+	DiskType   string `json:"diskType"`
+	IpAddr     string `json:"ipAddr"`
+	Runtime    int64  `json:"runtime"`
+	DataPool   string `json:"dataPool"`
+	DataVolume string `json:"dataVolume"`
+
+	OpType    []string `json:"opType"`
+	BlockSize []string `json:"blockSize"`
+	IoDepth   []int64  `json:"ioDepth"`
 }
 
 func (execConfig *ExecConfig) ReadConfig(configFilePath string) error {
@@ -79,10 +85,10 @@ func init() {
 	logger.Init()
 }
 
-func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error) {
+func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, error) {
 	var (
 		err error
-		res FioResult
+		res ExecResult
 	)
 
 	fioObject := fio.Fio{
@@ -143,8 +149,8 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*FioResult, error
 
 	res.FioResult = *fioResult
 	res.FioConfig = *fioConfig
-	res.ExpectCost = totalExpectCost / float64(totalCount)
-	res.ActualCost = totalActualCost / float64(totalCount)
+	res.ExpectCost, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", totalExpectCost/float64(totalCount)), 64)
+	res.ActualCost, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", totalActualCost/float64(totalCount)), 64)
 
 	name, value, err := csv.ObjectToCsv(res)
 	if err != nil {
@@ -221,23 +227,26 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 	return nil
 }
 
-func (execConfig *ExecConfig) Run() (*[]FioResult, error) {
+func (execConfig *ExecConfig) Run() (*[]ExecResult, error) {
 	var (
 		err           error
-		fioResultList []FioResult
+		fioResultList []ExecResult
 	)
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
 				fioConfig := &FioConfig{
-					WithJobCost: execConfig.WithJobCost,
-					DiskType:    execConfig.DiskType,
-					Runtime:     execConfig.Runtime,
-					OpType:      opType,
-					DataPool:    execConfig.DataPool,
-					DataVolume:  execConfig.DataVolume,
-					BlockSize:   blockSize,
-					IoDepth:     ioDepth,
+					WithRecovery:   execConfig.WithRecovery,
+					RecoveryPool:   execConfig.RecoveryPool,
+					RecoveryVolume: execConfig.RecoveryVolume,
+					WithJobCost:    execConfig.WithJobCost,
+					DiskType:       execConfig.DiskType,
+					Runtime:        execConfig.Runtime,
+					OpType:         opType,
+					DataPool:       execConfig.DataPool,
+					DataVolume:     execConfig.DataVolume,
+					BlockSize:      blockSize,
+					IoDepth:        ioDepth,
 				}
 				bsRes, err := execConfig.RunOneJob(fioConfig)
 				if err != nil {
@@ -252,7 +261,6 @@ func (execConfig *ExecConfig) Run() (*[]FioResult, error) {
 	return &fioResultList, err
 }
 
-
 func NewExecConfig(configPath string) (*ExecConfig, error) {
 	execConfig := ExecConfig{}
 	err := execConfig.ReadConfig(configPath)
@@ -264,12 +272,14 @@ func NewExecConfig(configPath string) (*ExecConfig, error) {
 	if err != nil {
 		return &execConfig, nil
 	}
-	defer func() { _ = execConfig.Cluster.Close() }()
+	//defer func() { _ = execConfig.Cluster.Close() }()
 
 	execConfig.CephConf, err = ceph.NewCephConf(execConfig.Master, execConfig.OsdNum)
 	if err != nil {
 		return &execConfig, nil
 	}
+
+	logrus.Debugf("NewExecConfig. execConfig:%+v", execConfig)
 	return &execConfig, nil
 }
 
@@ -289,7 +299,7 @@ func main() {
 		return
 	}
 
-	res, err := csv.ObjectListToCsv(fioResultList)
+	res, err := csv.ObjectListToCsv(*fioResultList)
 	if err != nil {
 		return
 	}

@@ -7,16 +7,15 @@ import (
 )
 
 type CephConf struct {
-	Ips []string `json:"ips"`
-	HostClient []host_client.HostClient `json:"hostClient"`
-	OsdNumMap map[int64]*host_client.HostClient `json:"osdNumMap"`
-
+	Ips        []string                          `json:"ips"`
+	HostClient []host_client.HostClient          `json:"hostClient"`
+	OsdNumMap  map[int64]*host_client.HostClient `json:"osdNumMap"`
 }
 
-func NewCephConf(worker interfacer.Worker,osdNums []int64) (*CephConf, error) {
+func NewCephConf(worker interfacer.Worker, osdNums []int64) (*CephConf, error) {
 	var (
 		conf CephConf
-		err error
+		err  error
 	)
 
 	conf.OsdNumMap = map[int64]*host_client.HostClient{}

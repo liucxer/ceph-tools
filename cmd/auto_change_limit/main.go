@@ -24,7 +24,8 @@ type ExecConfig struct {
 	MaxLimit              float64           `json:"maxLimit"`
 	MinLimit              float64           `json:"minLimit"`
 	Zoom                  float64           `json:"zoom"`
-	StdCoefficient        string            `json:"stdCoefficient"`
+	WriteStdCoefficient   string            `json:"writeStdCoefficient"`
+	ReadStdCoefficient    string            `json:"readStdCoefficient"`
 	cluster               *cluster_client.Cluster
 }
 
@@ -71,40 +72,54 @@ func (execConfig *ExecConfig) Run() error {
 		return err
 	}
 
-	avgExpectCost := jobCostList.AvgExpectCost()
-	avgActualCost := jobCostList.AvgActualCost()
+	var coefficients []float64
+	for _, jobCost := range jobCostList {
+		if jobCost.Type == "write" {
+			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
+			aFloat, _ := strconv.ParseFloat(aStr, 32)
 
-	coefficient := avgActualCost / (avgExpectCost * 1000 / float64(execConfig.AvgOsd4KRandWriteIops))
-	// y = 3.8721x^-0.349
+			bStr := strings.Split(execConfig.WriteStdCoefficient, "x")[1]
+			bFloat, _ := strconv.ParseFloat(bStr, 32)
+			expectCost := aFloat*jobCost.ExpectCost + bFloat
+			coefficient := jobCost.ActualCost / expectCost
+			coefficients = append(coefficients, coefficient)
+		} else {
+			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
+			aFloat, _ := strconv.ParseFloat(aStr, 32)
 
-	aStr := strings.Split(execConfig.StdCoefficient, "x")[0]
-	aFloat, _ := strconv.ParseFloat(aStr, 32)
-	bStr := strings.Split(execConfig.StdCoefficient, "^")[1]
-	bFloat, _ := strconv.ParseFloat(bStr, 32)
-	stdCoefficient := aFloat * math.Pow(avgExpectCost, bFloat)
+			bStr := strings.Split(execConfig.WriteStdCoefficient, "x")[1]
+			bFloat, _ := strconv.ParseFloat(bStr, 32)
+			expectCost := aFloat*jobCost.ExpectCost + bFloat
+			coefficient := jobCost.ActualCost / expectCost
+			coefficients = append(coefficients, coefficient)
+		}
+	}
 
-	minCoefficient := stdCoefficient
-	maxCoefficient := stdCoefficient * execConfig.Zoom
+	sumCoefficient := float64(0)
+	for _, coefficient := range coefficients {
+		sumCoefficient += coefficient
+	}
+	avgCoefficient := sumCoefficient / float64(len(coefficients))
+
+	minCoefficient := float64(1)
+	maxCoefficient := execConfig.Zoom
 
 	k := float64(1)
-	if coefficient < minCoefficient {
+	if avgCoefficient < minCoefficient {
 		k = 0
-	} else if coefficient > maxCoefficient {
+	} else if avgCoefficient > maxCoefficient {
 		k = 1
 	} else {
-		k = math.Abs(coefficient-minCoefficient) / (maxCoefficient - minCoefficient)
+		k = math.Abs(avgCoefficient-minCoefficient) / (maxCoefficient - minCoefficient)
 	}
 
 	limit := execConfig.MaxLimit - (execConfig.MaxLimit-execConfig.MinLimit)*k
 
 	logrus.Infof("execConfig:%+v, "+
-		"avgExpectCost:%0.2f,"+
-		"avgActualCost:%0.2f,"+
-		"coefficient:%0.2f,"+
-		"stdCoefficient:%0.2f,"+
+		"avgCoefficient:%0.2f,"+
 		"k:%0.2f,"+
 		"limit:%0.2f",
-		execConfig, avgExpectCost, avgActualCost, coefficient, stdCoefficient, k, limit)
+		execConfig, avgCoefficient, k, limit)
 
 	limitStr := fmt.Sprintf("%0.2f", limit)
 	for _, osdNum := range execConfig.OsdNum {
@@ -148,11 +163,6 @@ func main() {
 	execConfig := ExecConfig{}
 
 	err := execConfig.RefreshExecConfig(os.Args[1])
-	if err != nil {
-		return
-	}
-
-	err = execConfig.Init4KRandWriteIops()
 	if err != nil {
 		return
 	}
