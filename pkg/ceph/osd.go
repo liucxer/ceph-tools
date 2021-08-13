@@ -148,7 +148,7 @@ func (list JobCostList) BaseLineActualCost() float64 {
 		return 0
 	}
 
-	actualCost :=[]float64{}
+	actualCost := []float64{}
 	for _, item := range list {
 		if item.ActualCost < 1 {
 			continue
@@ -160,7 +160,6 @@ func (list JobCostList) BaseLineActualCost() float64 {
 	} else {
 		return actualCost[0]
 	}
-
 
 }
 

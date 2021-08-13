@@ -5,6 +5,7 @@
 
   "withJobCost": true,
   "osdNum": [0,1,2,3,4,5],
+  "withCephStatus": true,
 
   "diskType": "hdd",
   "dataPool": "hdd_end_pool",

@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -33,11 +34,11 @@ type FioConfig struct {
 }
 
 type ExecResult struct {
-	cluster_client.CephStatus
 	FioConfig
 	fio.FioResult
-	ExpectCost    float64 `json:"expectCost"`
-	ActualCost    float64 `json:"actualCost"`
+	cluster_client.CephStatus
+	ExpectCost         float64 `json:"expectCost"`
+	ActualCost         float64 `json:"actualCost"`
 	BaseLineActualCost float64 `json:"baseLineActualCost"`
 }
 
@@ -149,8 +150,10 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 				case <-ctx.Done():
 					return
 				default:
-					cephStatus, _ := execConfig.CurrentCephStatus()
-					cephStatusList = append(cephStatusList, *cephStatus)
+					cephStatus, err := execConfig.CurrentCephStatus()
+					if err == nil {
+						cephStatusList = append(cephStatusList, *cephStatus)
+					}
 					time.Sleep(1 * time.Second)
 				}
 			}
@@ -243,12 +246,16 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 	}
 
 	// 设置limit 最大, 这样recovery恢复最快
+	var wg sync.WaitGroup
 	for _, osdNum := range execConfig.OsdNum {
-		_, err = execConfig.OsdNumMap[osdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 100")
-		if err != nil {
-			return err
-		}
+		itemOsdNum := osdNum
+		wg.Add(1)
+		go func() {
+			_, _ = execConfig.OsdNumMap[itemOsdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(itemOsdNum)) + " config set osd_op_queue_mclock_recov_lim 100")
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -260,9 +267,18 @@ func (execConfig *ExecConfig) Run() (*[]ExecResult, error) {
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
+
+				var wg sync.WaitGroup
 				for _, osdNum := range execConfig.OsdNum {
-					_, _ = execConfig.OsdNumMap[osdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+					itemOsdNum := osdNum
+					wg.Add(1)
+					go func() {
+						_, _ = execConfig.OsdNumMap[itemOsdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(itemOsdNum)))
+						wg.Done()
+					}()
 				}
+				wg.Wait()
+				time.Sleep(1 * time.Second)
 				fioConfig := &FioConfig{
 					WithRecovery:   execConfig.WithRecovery,
 					RecoveryPool:   execConfig.RecoveryPool,

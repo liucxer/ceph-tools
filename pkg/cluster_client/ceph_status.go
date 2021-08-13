@@ -3,6 +3,7 @@ package cluster_client
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strconv"
 	"time"
 )
@@ -142,7 +143,7 @@ func (cluster *Cluster) CurrentCephStatus() (*CephStatus, error) {
 	}
 
 	var res CephStatus
-	resp, err := cluster.Clients[0].ExecCmd("ceph status -f json")
+	resp, err := cluster.Master.ExecCmd("ceph status -f json")
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +151,7 @@ func (cluster *Cluster) CurrentCephStatus() (*CephStatus, error) {
 	var cephStatusResp CephStatusResp
 	err = json.Unmarshal(resp, &cephStatusResp)
 	if err != nil {
+		logrus.Errorf("CurrentCephStatus json.Unmarshal. err:%v", err)
 		return nil, err
 	}
 
