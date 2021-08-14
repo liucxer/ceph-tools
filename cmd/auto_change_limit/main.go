@@ -3,26 +3,27 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strconv"
+	"time"
+
 	"github.com/liucxer/ceph-tools/pkg/ceph"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
 	"github.com/liucxer/confmiddleware/conflogger"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
-	"math"
-	"os"
-	"strconv"
-	"time"
 )
 
 type ExecConfig struct {
-	DiskType string  `json:"diskType"`
-	IpAddr   string  `json:"ipAddr"`
-	OsdNum   []int64 `json:"osdNum"`
-	MaxLimit float64 `json:"maxLimit"`
-	MinLimit float64 `json:"minLimit"`
-	Zoom     float64 `json:"zoom"`
+	DiskType  string  `json:"diskType"`
+	IpAddr    string  `json:"ipAddr"`
+	OsdNum    []int64 `json:"osdNum"`
+	MaxLimit  float64 `json:"maxLimit"`
+	MinLimit  float64 `json:"minLimit"`
+	Zoom      float64 `json:"zoom"`
+	LastLimit float64 `json:"lastLimit"`
 	*ceph.CephConf
-	cluster *cluster_client.Cluster
+	*cluster_client.Cluster
 }
 
 func (execConfig *ExecConfig) RefreshExecConfig(configFilePath string) error {
@@ -53,7 +54,7 @@ func (execConfig *ExecConfig) Run() error {
 
 	var jobCostList ceph.JobCostList
 	for _, osdNum := range execConfig.OsdNum {
-		item, err := ceph.GetJobCostList(execConfig.cluster.Master, osdNum)
+		item, err := ceph.GetJobCostList(execConfig.Master, osdNum)
 		if err != nil {
 			return err
 		}
@@ -63,7 +64,7 @@ func (execConfig *ExecConfig) Run() error {
 	if len(jobCostList) == 0 {
 		for _, osdNum := range execConfig.OsdNum {
 			cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999"
-			_, err = execConfig.cluster.Master.ExecCmd(cmdStr)
+			_, err = execConfig.Master.ExecCmd(cmdStr)
 		}
 		return err
 	}
@@ -87,30 +88,22 @@ func (execConfig *ExecConfig) Run() error {
 	}
 	avgCoefficient := sumCoefficient / float64(len(coefficients))
 
-	minCoefficient := float64(1)
-	maxCoefficient := execConfig.Zoom
-
-	k := float64(1)
-	if avgCoefficient < minCoefficient {
-		k = 0
-	} else if avgCoefficient > maxCoefficient {
-		k = 1
+	if avgCoefficient > execConfig.Zoom {
+		// 降低limit
+		execConfig.LastLimit -= 50
 	} else {
-		k = math.Abs(avgCoefficient-minCoefficient) / (maxCoefficient - minCoefficient)
+		// 增大limit
+		execConfig.LastLimit += 5
 	}
-
-	limit := execConfig.MaxLimit - (execConfig.MaxLimit-execConfig.MinLimit)*k
 
 	logrus.Infof("execConfig:%+v, "+
 		"avgCoefficient:%0.2f,"+
-		"k:%0.2f,"+
 		"limit:%0.2f",
-		execConfig, avgCoefficient, k, limit)
+		execConfig, avgCoefficient, execConfig.LastLimit)
 
-	limitStr := fmt.Sprintf("%0.2f", limit)
 	for _, osdNum := range execConfig.OsdNum {
-		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + limitStr
-		_, err = execConfig.cluster.Master.ExecCmd(cmdStr)
+		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.Itoa(int(execConfig.LastLimit))
+		_, err = execConfig.Master.ExecCmd(cmdStr)
 	}
 	return err
 }
@@ -143,9 +136,8 @@ func main() {
 	}
 	defer func() { _ = cluster.Close() }()
 
-	execConfig.cluster = cluster
-
-	execConfig.CephConf, err = ceph.NewCephConf(execConfig.cluster.Master, execConfig.OsdNum)
+	execConfig.Cluster = cluster
+	execConfig.CephConf, err = ceph.NewCephConf(execConfig.Master, execConfig.OsdNum)
 	if err != nil {
 		return
 	}
@@ -154,5 +146,4 @@ func main() {
 		_ = execConfig.Run()
 		time.Sleep(1 * time.Second)
 	}
-
 }
