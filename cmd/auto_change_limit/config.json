@@ -2,9 +2,9 @@
   "diskType": "hdd",
   "ipAddr": "10.0.20.27",
   "osdNum": [0,1,2,3,4,5],
-  "maxLimit": 1000,
-  "minLimit": 75,
+  "maxLimit": 600,
+  "minLimit": 10,
   "writeStdCoefficient": "3.2658x+16.104",
   "readStdCoefficient": "3.6466x-0.1367",
-  "zoom": 1.5
+  "zoom": 1.3
 }
