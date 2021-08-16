@@ -5,9 +5,9 @@
   "diskType": "hdd",
   "dataPool": "hdd_end_pool",
   "dataVolume": "image",
-  "runtime": 20,
+  "runtime": 180,
   "ipAddr": "10.0.20.27",
-  "opType": ["randread"],
+  "opType": ["read"],
   "blockSize": ["4k","64k","256k","1M","2M","4M"],
   "ioDepth": [1]
 }

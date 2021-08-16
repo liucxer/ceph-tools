@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/liucxer/ceph-tools/pkg/ceph"
 	"github.com/liucxer/ceph-tools/pkg/cluster_client"
 	"github.com/liucxer/ceph-tools/pkg/csv"
 	"github.com/liucxer/ceph-tools/pkg/fio"
 	"github.com/liucxer/confmiddleware/conflogger"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
-	"os"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type FioConfig struct {
@@ -194,7 +195,7 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 		}
 	}
 
-	// 设置limit 最大, 这样recovery恢复最快
+	// 设置limit 最大, recovery恢复最快
 	for _, osdNum := range execConfig.OsdNum {
 		_, err = execConfig.OsdNumMap[osdNum].ExecCmd("ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999")
 		if err != nil {
@@ -245,7 +246,6 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 		}
 	}
 
-	// 设置limit 最大, 这样recovery恢复最快
 	var wg sync.WaitGroup
 	for _, osdNum := range execConfig.OsdNum {
 		itemOsdNum := osdNum
@@ -267,18 +267,6 @@ func (execConfig *ExecConfig) Run() (*[]ExecResult, error) {
 	for _, opType := range execConfig.OpType {
 		for _, blockSize := range execConfig.BlockSize {
 			for _, ioDepth := range execConfig.IoDepth {
-
-				var wg sync.WaitGroup
-				for _, osdNum := range execConfig.OsdNum {
-					itemOsdNum := osdNum
-					wg.Add(1)
-					go func() {
-						_, _ = execConfig.OsdNumMap[itemOsdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(itemOsdNum)))
-						wg.Done()
-					}()
-				}
-				wg.Wait()
-				time.Sleep(1 * time.Second)
 				fioConfig := &FioConfig{
 					WithRecovery:   execConfig.WithRecovery,
 					RecoveryPool:   execConfig.RecoveryPool,
@@ -316,7 +304,6 @@ func NewExecConfig(configPath string) (*ExecConfig, error) {
 	if err != nil {
 		return &execConfig, nil
 	}
-	//defer func() { _ = execConfig.Cluster.Close() }()
 
 	execConfig.CephConf, err = ceph.NewCephConf(execConfig.Master, execConfig.OsdNum)
 	if err != nil {

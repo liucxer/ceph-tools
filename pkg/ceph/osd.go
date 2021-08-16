@@ -148,19 +148,21 @@ func (list JobCostList) BaseLineActualCost() float64 {
 		return 0
 	}
 
+	sumActualCost := float64(0)
+	count := float64(0)
 	actualCost := []float64{}
 	for _, item := range list {
 		if item.ActualCost < 1 {
 			continue
 		}
 		actualCost = append(actualCost, item.ActualCost)
-	}
-	if len(actualCost) > 10 {
-		return actualCost[len(actualCost)/10]
-	} else {
-		return actualCost[0]
+		sumActualCost += item.ActualCost
+		count ++
 	}
 
+	res := sumActualCost/count
+	res, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", res), 64)
+	return res
 }
 
 func (list JobCostList) AvgExpectCost() float64 {

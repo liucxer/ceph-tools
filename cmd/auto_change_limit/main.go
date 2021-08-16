@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/liucxer/ceph-tools/pkg/ceph"
@@ -51,30 +52,28 @@ func (execConfig *ExecConfig) RefreshExecConfig(configFilePath string) error {
 	return nil
 }
 
-func (execConfig *ExecConfig) Run() error {
+func (execConfig *ExecConfig) Run(osdNum int64) error {
 	var (
 		err error
 	)
 
-	var jobCostList ceph.JobCostList
-	for _, osdNum := range execConfig.OsdNum {
-		item, err := ceph.GetJobCostList(execConfig.Master, osdNum)
-		if err != nil {
-			return err
-		}
-		jobCostList = append(jobCostList, item...)
+	jobCostList, err := ceph.GetJobCostList(execConfig.Master, osdNum)
+	if err != nil {
+		return err
 	}
 
 	if len(jobCostList) == 0 {
-		for _, osdNum := range execConfig.OsdNum {
-			cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim 99999"
-			_, err = execConfig.Master.ExecCmd(cmdStr)
-		}
+		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.Itoa(int(execConfig.MaxLimit))
+		_, err = execConfig.Master.ExecCmd(cmdStr)
 		return err
 	}
 
 	var coefficients []float64
 	for _, jobCost := range jobCostList {
+		if jobCost.ActualCost < 1 {
+			// 忽略命中缓存的数据
+			continue
+		}
 		if jobCost.Type == "write" {
 			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
 			aFloat, _ := strconv.ParseFloat(aStr, 64)
@@ -113,10 +112,8 @@ func (execConfig *ExecConfig) Run() error {
 		"limit:%0.2f",
 		execConfig, avgCoefficient, execConfig.LastLimit)
 
-	for _, osdNum := range execConfig.OsdNum {
-		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.Itoa(int(execConfig.LastLimit))
-		_, err = execConfig.Master.ExecCmd(cmdStr)
-	}
+	cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.Itoa(int(execConfig.LastLimit))
+	_, err = execConfig.Master.ExecCmd(cmdStr)
 	return err
 }
 
@@ -154,8 +151,17 @@ func main() {
 		return
 	}
 
-	for {
-		_ = execConfig.Run()
-		time.Sleep(1 * time.Second)
+	var wg sync.WaitGroup
+	for _, osdNum := range execConfig.OsdNum {
+		itemOsdNum := osdNum
+		wg.Add(1)
+		go func() {
+			for {
+				_ = execConfig.Run(itemOsdNum)
+				time.Sleep(time.Second)
+			}
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 }

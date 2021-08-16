@@ -12,7 +12,7 @@
   "dataVolume": "image",
   "runtime": 180,
   "ipAddr": "10.0.20.27",
-  "opType": ["write"],
+  "opType": ["randwrite"],
   "blockSize": ["4k", "64k","256k","1M","2M","4M"],
-  "ioDepth": [1,8,16,32,64,128]
+  "ioDepth": [1]
 }

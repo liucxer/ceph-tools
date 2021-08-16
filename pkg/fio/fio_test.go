@@ -17,10 +17,10 @@ func TestFioConfig_Exec(t *testing.T) {
 
 	conf := fio.Fio{
 		OpType:    "read",
-		Runtime:   10,
+		Runtime:   100,
 		BlockSize: "4M",
 		IoDepth:   1,
-		Pool:      "hdd_2_pool",
+		Pool:      "hdd_end_pool",
 		RbdName:   "image",
 	}
 
