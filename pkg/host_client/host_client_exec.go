@@ -19,6 +19,7 @@ func (client *HostClient) ExecCmd(cmd string) ([]byte, error) {
 
 	sshSession, err := client.sshClient.NewSession()
 	if err != nil {
+		logrus.Errorf("client.sshClient.NewSession error [client:%+v, err:%v, cmd:%s]", client, err, cmd)
 		return nil, err
 	}
 	defer func() { _ = sshSession.Close() }()
@@ -29,7 +30,7 @@ func (client *HostClient) ExecCmd(cmd string) ([]byte, error) {
 		result = result[:200]
 	}
 	if err != nil {
-		logrus.Errorf("session.CombinedOutput error [host:%s, err:%v, cmd:%s]", client.IpAddr, err, cmd)
+		logrus.Errorf("session.CombinedOutput error [client:%+v, err:%v, cmd:%s]", client, err, cmd)
 		return nil, err
 	}
 	return combo, err

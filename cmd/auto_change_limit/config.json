@@ -4,7 +4,7 @@
   "osdNum": [0,1,2,3,4,5],
   "maxLimit": 600,
   "minLimit": 10,
-  "writeStdCoefficient": "3.2658x+16.104",
-  "readStdCoefficient": "3.6466x-0.1367",
+  "writeStdCoefficient": "3.9731x+15.583",
+  "readStdCoefficient": "7.0727x+6.3695",
   "zoom": 1.3
 }

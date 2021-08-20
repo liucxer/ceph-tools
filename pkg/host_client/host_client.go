@@ -62,11 +62,11 @@ func (client *HostClient) open() error {
 		return err
 	}
 
-	client.sftpClient, err = sftp.NewClient(client.sshClient, sftp.MaxPacket(1<<15))
-	if err != nil {
-		logrus.Errorf("sftp.NewClient err. [err:%v,client:%v]", err, client)
-		return err
-	}
+	//client.sftpClient, err = sftp.NewClient(client.sshClient, sftp.MaxPacket(1<<15))
+	//if err != nil {
+	//	logrus.Errorf("sftp.NewClient err. [err:%v,client:%v]", err, client)
+	//	return err
+	//}
 
 	return nil
 }
@@ -76,11 +76,11 @@ func (client *HostClient) Close() error {
 		err error
 	)
 
-	err = client.sftpClient.Close()
-	if err != nil {
-		logrus.Errorf("client.sshSession.Close error [client:%v, err:%v]", client, err)
-		return err
-	}
+	//err = client.sftpClient.Close()
+	//if err != nil {
+	//	logrus.Errorf("client.sshSession.Close error [client:%v, err:%v]", client, err)
+	//	return err
+	//}
 
 	err = client.sshClient.Close()
 	if err != nil {

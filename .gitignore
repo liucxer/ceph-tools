@@ -3,3 +3,4 @@ go.sum
 coverage.*
 *.log
 build
+log/

@@ -157,10 +157,10 @@ func (list JobCostList) BaseLineActualCost() float64 {
 		}
 		actualCost = append(actualCost, item.ActualCost)
 		sumActualCost += item.ActualCost
-		count ++
+		count++
 	}
 
-	res := sumActualCost/count
+	res := sumActualCost / count
 	res, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", res), 64)
 	return res
 }
@@ -184,10 +184,16 @@ func (list JobCostList) AvgActualCost() float64 {
 	}
 
 	sum := float64(0)
+	count := 0
 	for _, item := range list {
+		if item.ActualCost < 1 {
+			continue
+		}
+
 		sum = sum + item.ActualCost
+		count ++
 	}
-	res, _ := strconv.ParseFloat(fmt.Sprintf("%.2f", sum/float64(len(list))), 64)
+	res, _ := strconv.ParseFloat(fmt.Sprintf("%.2f", sum/float64(count)), 64)
 	return res
 }
 

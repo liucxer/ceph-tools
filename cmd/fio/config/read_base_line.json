@@ -1,0 +1,13 @@
+{
+  "withJobCost": true,
+  "osdNum": [0,1,2,3,4,5],
+
+  "diskType": "hdd",
+  "dataPool": "hdd_end_pool",
+  "dataVolume": "image",
+  "runtime": 180,
+  "ipAddr": "10.0.20.27",
+  "opType": ["read"],
+  "blockSize": ["256k","1M","2M","4M"],
+  "ioDepth": [1]
+}
