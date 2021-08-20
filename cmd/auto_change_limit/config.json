@@ -5,6 +5,6 @@
   "maxLimit": 600,
   "minLimit": 10,
   "writeStdCoefficient": "3.9731x+15.583",
-  "readStdCoefficient": "7.0727x+6.3695",
+  "readStdCoefficient": "6.7904x+10.302",
   "zoom": 1.3
 }

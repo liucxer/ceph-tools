@@ -13,4 +13,4 @@ ceph_tools_fio_windows: main.go
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ./build/ceph_tools_fio_windows main.go
 
 install: all
-	scp ./build/ceph_tools_fio_linux root@10.0.20.27:/home/liucx/fio/
+	scp ./build/ceph_tools_fio_linux root@10.0.20.27:/workspace/liuchangxi/fio/

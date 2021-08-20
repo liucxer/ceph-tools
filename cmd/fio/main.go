@@ -106,6 +106,12 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 		RbdName:   fioConfig.DataVolume,
 	}
 
+	// 清空内存缓存
+	_, err  = execConfig.Master.ExecCmd("ceph tell osd.* cache drop")
+	if err != nil {
+		return &res, err
+	}
+
 	ctx, cancelFn := context.WithCancel(context.Background())
 
 	if execConfig.WithRecovery {

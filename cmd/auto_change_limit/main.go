@@ -70,10 +70,6 @@ func (execConfig *ExecConfig) Run(osdNum int64) error {
 
 	var coefficients []float64
 	for _, jobCost := range jobCostList {
-		if jobCost.ActualCost < 1 {
-			// 忽略命中缓存的数据
-			continue
-		}
 		if jobCost.Type == "write" {
 			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
 			aFloat, _ := strconv.ParseFloat(aStr, 64)
@@ -88,6 +84,14 @@ func (execConfig *ExecConfig) Run(osdNum int64) error {
 			bStr := strings.Split(execConfig.ReadStdCoefficient, "x")[1]
 			bFloat, _ := strconv.ParseFloat(bStr, 64)
 			expectCost := aFloat*jobCost.ExpectCost + bFloat
+			if jobCost.ExpectCost == 1 {
+				expectCost = 6.5
+			}
+			if jobCost.ActualCost < 0.3 * (expectCost) {
+				// 忽略命中缓存的数据
+				continue
+			}
+
 			coefficient := jobCost.ActualCost / expectCost
 			coefficients = append(coefficients, coefficient)
 		}
