@@ -107,10 +107,12 @@ func (execConfig *ExecConfig) RunOneJob(fioConfig *FioConfig) (*ExecResult, erro
 	}
 
 	// 清空内存缓存
-	_, err  = execConfig.Master.ExecCmd("ceph tell osd.* cache drop")
-	if err != nil {
-		return &res, err
-	}
+	//for _, osdNum := range execConfig.OsdNum {
+	//	_, err = execConfig.OsdNumMap[osdNum].ExecCmd("ceph tell osd." + strconv.Itoa(int(osdNum))+ " cache drop")
+	//	if err != nil {
+	//		return &res, err
+	//	}
+	//}
 
 	ctx, cancelFn := context.WithCancel(context.Background())
 
@@ -194,12 +196,12 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 	var (
 		err error
 	)
-	for _, osdNum := range execConfig.OsdNum {
-		_, err = execConfig.OsdNumMap[osdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
-		if err != nil {
-			return err
-		}
-	}
+	//for _, osdNum := range execConfig.OsdNum {
+	//	_, err = execConfig.OsdNumMap[osdNum].ExecCmd("systemctl restart ceph-osd@" + strconv.Itoa(int(osdNum)))
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 
 	// 设置limit 最大, recovery恢复最快
 	for _, osdNum := range execConfig.OsdNum {
@@ -237,11 +239,11 @@ func (execConfig *ExecConfig) WaitOsdClean() error {
 				return err
 			}
 
-			if osdPerf.OSD.NumpgRemoving != 0 {
+			if osdPerf.OSD.NumpgRemoving > 5 {
 				count = 0
 				continue
 			}
-			if osdPerf.OSD.NumpgStray != 0 {
+			if osdPerf.OSD.NumpgStray > 5 {
 				count = 0
 				continue
 			}

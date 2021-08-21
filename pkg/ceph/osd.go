@@ -191,7 +191,7 @@ func (list JobCostList) AvgActualCost() float64 {
 		}
 
 		sum = sum + item.ActualCost
-		count ++
+		count++
 	}
 	res, _ := strconv.ParseFloat(fmt.Sprintf("%.2f", sum/float64(count)), 64)
 	return res
