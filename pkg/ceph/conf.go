@@ -28,12 +28,14 @@ func NewCephConf(worker interfacer.Worker, osdNums []int64) (*CephConf, error) {
 	conf.Worker = worker
 	conf.OsdNum = osdNums
 	conf.OsdNumMap = map[int64]*host_client.HostClient{}
+
+	ipMap, err := GetOSDIpMap(worker, osdNums)
+	if err != nil {
+		return &conf, err
+	}
+
 	for _, osdNum := range osdNums {
-		ip, err := GetOSDIp(worker, osdNum)
-		if err != nil {
-			return &conf, err
-		}
-		hostClient, err := host_client.NewHostClient(ip)
+		hostClient, err := host_client.NewHostClient(ipMap[osdNum])
 		if err != nil {
 			return &conf, err
 		}

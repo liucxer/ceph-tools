@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/liucxer/ceph-tools/pkg/ceph"
@@ -52,28 +51,26 @@ func (execConfig *ExecConfig) RefreshExecConfig(configFilePath string) error {
 	return nil
 }
 
-func (execConfig *ExecConfig) Run(osdNum int64) error {
+func (execConfig *ExecConfig) Run() error {
 	var (
 		err error
+		jobCostList ceph.JobCostList
 	)
 
-	jobCostList, err := ceph.GetJobCostList(execConfig.Master, osdNum)
+	jobCostList, err = ceph.GetJobCostListByOsdNums(execConfig.Master, execConfig.OsdNum)
 	if err != nil {
 		return err
 	}
 
 	if len(jobCostList) == 0 {
-		cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.Itoa(int(execConfig.MaxLimit))
-		_, err = execConfig.Master.ExecCmd(cmdStr)
-		return err
+		err = ceph.BatchSetRecoveryLimit(execConfig.CephConf.OsdNumMap, execConfig.OsdNum, float64(99999))
+		if err != nil {
+			return err
+		}
 	}
 
 	var coefficients []float64
 	for _, jobCost := range jobCostList {
-		if jobCost.ActualCost < 1 {
-			// 忽略命中缓存的数据
-			continue
-		}
 		if jobCost.Type == "write" {
 			aStr := strings.Split(execConfig.WriteStdCoefficient, "x")[0]
 			aFloat, _ := strconv.ParseFloat(aStr, 64)
@@ -88,17 +85,26 @@ func (execConfig *ExecConfig) Run(osdNum int64) error {
 			bStr := strings.Split(execConfig.ReadStdCoefficient, "x")[1]
 			bFloat, _ := strconv.ParseFloat(bStr, 64)
 			expectCost := aFloat*jobCost.ExpectCost + bFloat
+			if jobCost.ActualCost < 0.1 * expectCost {
+				// 忽略命中缓存的数据
+				continue
+			}
+
 			coefficient := jobCost.ActualCost / expectCost
 			coefficients = append(coefficients, coefficient)
 		}
+	}
+	if len(coefficients) == 0 {
+		logrus.Infof("len(coefficients) == 0")
+		return err
 	}
 
 	sumCoefficient := float64(0)
 	for _, coefficient := range coefficients {
 		sumCoefficient += coefficient
 	}
-	avgCoefficient := sumCoefficient / float64(len(coefficients))
 
+	avgCoefficient := sumCoefficient / float64(len(coefficients))
 	if avgCoefficient > execConfig.Zoom {
 		// 降低limit
 		execConfig.LastLimit = math.Max(execConfig.LastLimit-float64(50), execConfig.MinLimit)
@@ -112,8 +118,11 @@ func (execConfig *ExecConfig) Run(osdNum int64) error {
 		"limit:%0.2f",
 		execConfig, avgCoefficient, execConfig.LastLimit)
 
-	cmdStr := "ceph daemon osd." + strconv.Itoa(int(osdNum)) + " config set osd_op_queue_mclock_recov_lim " + strconv.Itoa(int(execConfig.LastLimit))
-	_, err = execConfig.Master.ExecCmd(cmdStr)
+	err = ceph.BatchSetRecoveryLimit(execConfig.CephConf.OsdNumMap, execConfig.OsdNum, execConfig.LastLimit)
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 
@@ -143,6 +152,7 @@ func main() {
 	if err != nil {
 		return
 	}
+
 	defer func() { _ = cluster.Close() }()
 
 	execConfig.Cluster = cluster
@@ -151,17 +161,8 @@ func main() {
 		return
 	}
 
-	var wg sync.WaitGroup
-	for _, osdNum := range execConfig.OsdNum {
-		itemOsdNum := osdNum
-		wg.Add(1)
-		go func() {
-			for {
-				_ = execConfig.Run(itemOsdNum)
-				time.Sleep(time.Second)
-			}
-			wg.Done()
-		}()
+	for {
+		_ = execConfig.Run()
+		time.Sleep(1 * time.Second)
 	}
-	wg.Wait()
 }

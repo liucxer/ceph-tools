@@ -5,13 +5,40 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/liucxer/ceph-tools/pkg/host_client"
 	"github.com/liucxer/ceph-tools/pkg/interfacer"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
-func GetOSDIp(worker interfacer.Worker, osdID int64) (string, error) {
+func GetOSDIpMap(worker interfacer.Worker, osdNums []int64) (map[int64]string, error) {
+	var (
+		err error
+		res map[int64]string
+	)
+
+	res = map[int64]string{}
+	var wg sync.WaitGroup
+	for _, osdNum := range osdNums {
+		itemOsdNum := osdNum
+		wg.Add(1)
+		go func() {
+			defer func() {wg.Done()}()
+			ip, err := GetOSDIp(worker, itemOsdNum)
+			if err != nil {
+				return
+			}
+			res[itemOsdNum]=ip
+		}()
+	}
+	wg.Wait()
+
+	return res, err
+}
+
+func GetOSDIp(worker interfacer.Worker, osdNum int64) (string, error) {
 	var (
 		err error
 	)
@@ -20,7 +47,7 @@ func GetOSDIp(worker interfacer.Worker, osdID int64) (string, error) {
 		BackAddr string `json:"back_addr"`
 	}
 
-	bts, err := worker.ExecCmd("ceph osd metadata " + strconv.Itoa(int(osdID)))
+	bts, err := worker.ExecCmd("ceph osd metadata " + strconv.Itoa(int(osdNum)))
 	if err != nil {
 		return "", err
 	}
@@ -237,6 +264,26 @@ func GetJobCostList(worker interfacer.Worker, osdNum int64) (JobCostList, error)
 	return resp, nil
 }
 
+func GetJobCostListByOsdNums(worker interfacer.Worker, osdNums []int64) (JobCostList, error) {
+	var wg sync.WaitGroup
+	var jobCostList JobCostList
+	for _, osdNum := range osdNums {
+		itemOsdNum := osdNum
+		wg.Add(1)
+		go func() {
+			itemList, err := GetJobCostList(worker, itemOsdNum)
+			if err != nil {
+				return
+			}
+			jobCostList = append(jobCostList, itemList...)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	return jobCostList, nil
+}
+
 func AsyncJobCostListFunc(ctx context.Context, worker interfacer.Worker, osdNum []int64) (JobCostList, error) {
 	var (
 		err error
@@ -295,3 +342,21 @@ func Get4KRandWriteIops(worker interfacer.Worker, osdNum int64) (float64, error)
 
 	return resp.Iops, nil
 }
+
+func BatchSetRecoveryLimit(mapWorker map[int64]*host_client.HostClient, osdNums []int64, limit float64) error {
+	var wg sync.WaitGroup
+	for _, osdNum := range osdNums {
+		itemOsdNum := osdNum
+		wg.Add(1)
+		go func() {
+			cmdStr := "ceph daemon osd." + strconv.Itoa(int(itemOsdNum)) +
+				" config set osd_op_queue_mclock_recov_lim " + strconv.FormatFloat(limit,'E',-1, 64)
+			_, _ = mapWorker[itemOsdNum].ExecCmd(cmdStr)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	return nil
+}
+
